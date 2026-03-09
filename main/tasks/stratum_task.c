@@ -187,15 +187,19 @@ static void decode_mining_notification(GlobalState * GLOBAL_STATE, const mining_
     mining_notification_result_t result;
     memset(&result, 0, sizeof(result));
 
-    const char * user = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback
+    bool using_fallback = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback;
+    const char * user = using_fallback
         ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user
         : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
+    bool decode_coinbase = using_fallback
+        ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_decode_coinbase
+        : GLOBAL_STATE->SYSTEM_MODULE.pool_decode_coinbase;
 
     if (coinbase_process_notification(notification,
                                       GLOBAL_STATE->extranonce_str,
                                       GLOBAL_STATE->extranonce_2_len,
                                       user,
-                                      false,  // decode_outputs disabled by default
+                                      decode_coinbase,
                                       &result) != ESP_OK) {
         return;
     }
@@ -325,8 +329,23 @@ void stratum_task(void * pvParameters)
         //mining.authorize - ID: 3
         STRATUM_V1_authenticate(GLOBAL_STATE->sock, GLOBAL_STATE->send_uid++, username, password);
 
+        bool using_fallback = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback;
+        uint16_t suggested_difficulty = using_fallback
+            ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_suggested_difficulty
+            : GLOBAL_STATE->SYSTEM_MODULE.pool_suggested_difficulty;
+        bool extranonce_subscribe = using_fallback
+            ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_extranonce_subscribe
+            : GLOBAL_STATE->SYSTEM_MODULE.pool_extranonce_subscribe;
+
         //mining.suggest_difficulty - ID: 4
-        STRATUM_V1_suggest_difficulty(GLOBAL_STATE->sock, GLOBAL_STATE->send_uid++, STRATUM_DIFFICULTY);
+        if (suggested_difficulty > 0) {
+            STRATUM_V1_suggest_difficulty(GLOBAL_STATE->sock, GLOBAL_STATE->send_uid++, suggested_difficulty);
+        }
+
+        //mining.extranonce.subscribe
+        if (extranonce_subscribe) {
+            STRATUM_V1_extranonce_subscribe(GLOBAL_STATE->sock, GLOBAL_STATE->send_uid++);
+        }
 
         // Everything is set up, lets make sure we don't abandon work unnecessarily.
         GLOBAL_STATE->abandon_work = 0;

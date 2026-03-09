@@ -64,6 +64,13 @@ export interface ISystemInfo {
     power_fault?: string
     overclockEnabled?: number,
 
+    stratumSuggestedDifficulty?: number,
+    fallbackStratumSuggestedDifficulty?: number,
+    stratumExtranonceSubscribe?: number,
+    fallbackStratumExtranonceSubscribe?: number,
+    stratumDecodeCoinbase?: number,
+    fallbackStratumDecodeCoinbase?: number,
+
     blockHeight?: number,
     scriptsig?: string,
     networkDifficulty?: number,

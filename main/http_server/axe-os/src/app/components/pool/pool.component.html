@@ -68,6 +68,66 @@
             </div>
         </div>
 
+        <!-- Advanced Options -->
+        <h5 class="mt-4 mb-3">Advanced Options</h5>
+
+        <div class="field grid p-fluid">
+            <label htmlFor="stratumSuggestedDifficulty" class="col-12 mb-2 md:col-2 md:mb-0">Suggested Difficulty</label>
+            <div class="col-12 md:col-10">
+                <input pInputText id="stratumSuggestedDifficulty" formControlName="stratumSuggestedDifficulty" type="number" min="0" />
+                <small class="block mt-1 text-color-secondary">Hint to the pool for share difficulty. Set to 0 to let the pool decide.</small>
+            </div>
+        </div>
+
+        <div class="field grid p-fluid">
+            <label htmlFor="fallbackStratumSuggestedDifficulty" class="col-12 mb-2 md:col-2 md:mb-0">Fallback Suggested Difficulty</label>
+            <div class="col-12 md:col-10">
+                <input pInputText id="fallbackStratumSuggestedDifficulty" formControlName="fallbackStratumSuggestedDifficulty" type="number" min="0" />
+            </div>
+        </div>
+
+        <div class="field-checkbox grid mt-2">
+            <div class="col-1 md:col-10 md:flex-order-2">
+                <p-checkbox inputId="stratumExtranonceSubscribe" formControlName="stratumExtranonceSubscribe" [binary]="true"></p-checkbox>
+            </div>
+            <label for="stratumExtranonceSubscribe" class="col-11 m-0 pl-3 md:col-2 md:flex-order-1 md:p-2">
+                Enable Extranonce Subscribe
+                <small class="block text-color-secondary">Required by some pools — check pool documentation.</small>
+            </label>
+        </div>
+
+        <div class="field-checkbox grid mt-2">
+            <div class="col-1 md:col-10 md:flex-order-2">
+                <p-checkbox inputId="fallbackStratumExtranonceSubscribe" formControlName="fallbackStratumExtranonceSubscribe" [binary]="true"></p-checkbox>
+            </div>
+            <label for="fallbackStratumExtranonceSubscribe" class="col-11 m-0 pl-3 md:col-2 md:flex-order-1 md:p-2">
+                Fallback Enable Extranonce Subscribe
+            </label>
+        </div>
+
+        <div class="field-checkbox grid mt-2">
+            <div class="col-1 md:col-10 md:flex-order-2">
+                <p-checkbox inputId="stratumDecodeCoinbase" formControlName="stratumDecodeCoinbase" [binary]="true"></p-checkbox>
+            </div>
+            <label for="stratumDecodeCoinbase" class="col-11 m-0 pl-3 md:col-2 md:flex-order-1 md:p-2">
+                Decode Coinbase Tx
+                <small class="block text-color-secondary">Disable when mining on non-Bitcoin chains.</small>
+            </label>
+        </div>
+
+        <div class="field-checkbox grid mt-2">
+            <div class="col-1 md:col-10 md:flex-order-2">
+                <p-checkbox inputId="fallbackStratumDecodeCoinbase" formControlName="fallbackStratumDecodeCoinbase" [binary]="true"></p-checkbox>
+            </div>
+            <label for="fallbackStratumDecodeCoinbase" class="col-11 m-0 pl-3 md:col-2 md:flex-order-1 md:p-2">
+                Fallback Decode Coinbase Tx
+            </label>
+        </div>
+
+        <p-message *ngIf="form && isUsingDefaultAddress()" severity="warn" styleClass="w-full mt-3"
+            text="You are using the default factory Bitcoin address. Change the Stratum User to your own address to receive mining rewards.">
+        </p-message>
+
         <div class="mt-2">
             <button pButton [disabled]="!form.dirty || form.invalid" (click)="updateSystem()"
                 class="btn btn-primary mr-2">Save</button>

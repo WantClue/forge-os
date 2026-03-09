@@ -14,6 +14,8 @@ export class PoolComponent implements OnInit {
   public form!: FormGroup;
   public savedChanges: boolean = false;
 
+  public readonly DEFAULT_BITCOIN_ADDRESS = 'bc1qnp980s5fpp8l94p5cvttmtdqy8rvrq74qly2yrfmzkdsntqzlc5qkc4rkq';
+
   @Input() uri = '';
 
   constructor(
@@ -53,7 +55,13 @@ export class PoolComponent implements OnInit {
           stratumUser: [info.stratumUser, [Validators.required]],
           stratumPassword: ['*****', [Validators.required]],
           fallbackStratumUser: [info.fallbackStratumUser, [Validators.required]],
-          fallbackStratumPassword: ['password', [Validators.required]]
+          fallbackStratumPassword: ['password', [Validators.required]],
+          stratumSuggestedDifficulty: [info.stratumSuggestedDifficulty ?? 0, [Validators.required, Validators.min(0)]],
+          fallbackStratumSuggestedDifficulty: [info.fallbackStratumSuggestedDifficulty ?? 0, [Validators.required, Validators.min(0)]],
+          stratumExtranonceSubscribe: [info.stratumExtranonceSubscribe == 1],
+          fallbackStratumExtranonceSubscribe: [info.fallbackStratumExtranonceSubscribe == 1],
+          stratumDecodeCoinbase: [info.stratumDecodeCoinbase !== 0],
+          fallbackStratumDecodeCoinbase: [info.fallbackStratumDecodeCoinbase !== 0],
         });
       });
   }
@@ -89,6 +97,12 @@ export class PoolComponent implements OnInit {
   showFallbackStratumPassword: boolean = false;
   toggleFallbackStratumPasswordVisibility() {
     this.showFallbackStratumPassword = !this.showFallbackStratumPassword;
+  }
+
+  public isUsingDefaultAddress(): boolean {
+    const user = this.form?.get('stratumUser')?.value || '';
+    const fallback = this.form?.get('fallbackStratumUser')?.value || '';
+    return user.includes(this.DEFAULT_BITCOIN_ADDRESS) || fallback.includes(this.DEFAULT_BITCOIN_ADDRESS);
   }
 
   public restart() {
