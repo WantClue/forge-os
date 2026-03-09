@@ -53,21 +53,33 @@
     </div>
 
     <div class="col-12">
-        <div class="card">
+        <div class="card" [class.logs-fullscreen-container]="isFullscreen">
             <div class="logs-header">
                 <h2>Realtime Logs</h2>
                 <div class="log-controls">
                     <button pButton (click)="toggleLogs()" class="btn-secondary control-button">
                         {{showLogs ? 'Hide': 'Show'}} Logs
                     </button>
-                    <button pButton class="btn-secondary control-button" (click)="stopScroll = !stopScroll" *ngIf="showLogs">
-                        {{stopScroll ? 'Start' : 'Stop'}} Scrolling
-                    </button>
+                    <ng-container *ngIf="showLogs">
+                        <input pInputText type="text" [(ngModel)]="filterText"
+                            placeholder="Filter logs..."
+                            class="control-filter" />
+                        <button pButton class="btn-secondary control-button" (click)="stopScroll = !stopScroll">
+                            {{stopScroll ? 'Start' : 'Stop'}} Scrolling
+                        </button>
+                        <button pButton class="btn-secondary control-button" (click)="clearLogs()">
+                            Clear
+                        </button>
+                        <button pButton class="btn-secondary control-button" (click)="toggleFullscreen()"
+                            pTooltip="{{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}}" tooltipPosition="top">
+                            <i class="pi" [ngClass]="isFullscreen ? 'pi-compress' : 'pi-expand'"></i>
+                        </button>
+                    </ng-container>
                 </div>
             </div>
 
             <div *ngIf="showLogs" id="logs" #scrollContainer>
-                <div *ngFor="let log of logs" [ngClass]="log.className">₿ {{log.text | ANSI}}</div>
+                <div *ngFor="let log of filteredLogs" [ngClass]="log.className">₿ {{log.text | ANSI}}</div>
             </div>
         </div>
     </div>

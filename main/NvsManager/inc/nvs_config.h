@@ -29,6 +29,18 @@
 #define NVS_CONFIG_OVERCLOCK_ENABLED "oc_enabled"
 #define NVS_CONFIG_SWARM "swarmconfig"
 
+// Fan control settings
+#define NVS_CONFIG_FAN_TARGET_TEMP "fantargettemp"
+#define NVS_CONFIG_FAN_MIN_SPEED   "fanminspeed"
+
+// Stratum advanced options
+#define NVS_CONFIG_STRATUM_DIFFICULTY              "stratumdiff"
+#define NVS_CONFIG_STRATUM_EXTRANONCE_SUBSCRIBE    "stratumxnsub"
+#define NVS_CONFIG_STRATUM_DECODE_COINBASE         "stratumdecode"
+#define NVS_CONFIG_FALLBACK_STRATUM_DIFFICULTY     "fbstratumdiff"
+#define NVS_CONFIG_FALLBACK_STRATUM_EXTRANONCE_SUB "fbstratumxnsub"
+#define NVS_CONFIG_FALLBACK_STRATUM_DECODE_COINBASE "fbstratumdecode"
+
 // Theme configuration
 #define NVS_CONFIG_THEME_SCHEME "themescheme"
 #define NVS_CONFIG_THEME_NAME "themename"

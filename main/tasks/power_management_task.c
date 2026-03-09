@@ -38,10 +38,10 @@ static bool even = false;
 // VR: 65°C (35%) → 90°C (100%)
 static double automatic_fan_speed(float chip_temp, float vr_temp, GlobalState * GLOBAL_STATE)
 {
-    double min_fan_speed = 35.0;
-    
+    double min_fan_speed = (double)nvs_config_get_u16(NVS_CONFIG_FAN_MIN_SPEED, 35);
+
     // Calculate fan speed based on ASIC temperature
-    double asic_min_temp = 45.0;
+    double asic_min_temp = (double)nvs_config_get_u16(NVS_CONFIG_FAN_TARGET_TEMP, 45);
     double asic_max_temp = THROTTLE_TEMP; // 75.0°C
     double asic_fan_speed = min_fan_speed;
     

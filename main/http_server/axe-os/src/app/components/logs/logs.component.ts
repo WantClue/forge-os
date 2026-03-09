@@ -19,8 +19,23 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
   private websocketSubscription?: Subscription;
 
   public showLogs = false;
-
   public stopScroll: boolean = false;
+  public filterText = '';
+  public isFullscreen = false;
+
+  get filteredLogs() {
+    if (!this.filterText) return this.logs;
+    const f = this.filterText.toLowerCase();
+    return this.logs.filter(log => log.text.toLowerCase().includes(f));
+  }
+
+  public clearLogs() {
+    this.logs = [];
+  }
+
+  public toggleFullscreen() {
+    this.isFullscreen = !this.isFullscreen;
+  }
 
   constructor(
     private websocketService: WebsocketService,

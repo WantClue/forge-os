@@ -538,12 +538,31 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "fanspeed")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, item->valueint);
     }
+    if ((item = cJSON_GetObjectItem(root, "fanTargetTemp")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_FAN_TARGET_TEMP, item->valueint);
+    }
+    if ((item = cJSON_GetObjectItem(root, "fanMinSpeed")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_FAN_MIN_SPEED, item->valueint);
+    }
     if ((item = cJSON_GetObjectItem(root, "overclockEnabled")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_OVERCLOCK_ENABLED, item->valueint);
     }
 
     cJSON_Delete(root);
     httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
+static esp_err_t POST_identify(httpd_req_t * req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+    httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }
 
@@ -692,6 +711,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "fanspeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc);
     cJSON_AddNumberToObject(root, "fanrpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_rpm[0]);
+    cJSON_AddNumberToObject(root, "fanTargetTemp", nvs_config_get_u16(NVS_CONFIG_FAN_TARGET_TEMP, 45));
+    cJSON_AddNumberToObject(root, "fanMinSpeed", nvs_config_get_u16(NVS_CONFIG_FAN_MIN_SPEED, 35));
+    cJSON_AddBoolToObject(root, "blockFound", GLOBAL_STATE->SYSTEM_MODULE.FOUND_BLOCK);
     
     cJSON_AddNumberToObject(root, "chiptemp1", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp[0]);
     cJSON_AddNumberToObject(root, "chiptemp2", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp[1]);
@@ -704,6 +726,19 @@ static esp_err_t GET_system_info(httpd_req_t * req)
         cJSON_AddNumberToObject(root, "blockHeight", GLOBAL_STATE->block_height);
         cJSON_AddStringToObject(root, "scriptsig", GLOBAL_STATE->scriptsig);
         cJSON_AddNumberToObject(root, "networkDifficulty", GLOBAL_STATE->network_nonce_diff);
+    }
+
+    if (GLOBAL_STATE->coinbase_output_count > 0) {
+        cJSON *coinbase_arr = cJSON_CreateArray();
+        for (int i = 0; i < GLOBAL_STATE->coinbase_output_count; i++) {
+            cJSON *output = cJSON_CreateObject();
+            cJSON_AddNumberToObject(output, "valueSatoshis", (double)GLOBAL_STATE->coinbase_outputs[i].value_satoshis);
+            cJSON_AddStringToObject(output, "address", GLOBAL_STATE->coinbase_outputs[i].address);
+            cJSON_AddBoolToObject(output, "isUserOutput", GLOBAL_STATE->coinbase_outputs[i].is_user_output);
+            cJSON_AddItemToArray(coinbase_arr, output);
+        }
+        cJSON_AddItemToObject(root, "coinbaseOutputs", coinbase_arr);
+        cJSON_AddNumberToObject(root, "coinbaseValueTotal", (double)GLOBAL_STATE->coinbase_value_total_satoshis);
     }
 
     cJSON *hashrate_monitor = cJSON_CreateObject();
@@ -1057,7 +1092,7 @@ esp_err_t start_rest_server(void * pvParameters)
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192;
     config.max_open_sockets = 10;
-    config.max_uri_handlers = 20;
+    config.max_uri_handlers = 24;
 
     ESP_LOGI(TAG, "Starting HTTP Server");
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
@@ -1134,9 +1169,25 @@ esp_err_t start_rest_server(void * pvParameters)
     };
     httpd_register_uri_handler(server, &swarm_options_uri);
 
+    httpd_uri_t system_identify_uri = {
+        .uri = "/api/system/identify",
+        .method = HTTP_POST,
+        .handler = POST_identify,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &system_identify_uri);
+
+    httpd_uri_t system_identify_options_uri = {
+        .uri = "/api/system/identify",
+        .method = HTTP_OPTIONS,
+        .handler = handle_options_request,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &system_identify_options_uri);
+
     httpd_uri_t system_restart_uri = {
-        .uri = "/api/system/restart", .method = HTTP_POST, 
-        .handler = POST_restart, 
+        .uri = "/api/system/restart", .method = HTTP_POST,
+        .handler = POST_restart,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_restart_uri);

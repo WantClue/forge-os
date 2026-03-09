@@ -77,6 +77,16 @@
   }
 }
 
+.swarm-table-wrapper { overflow-x: auto; }
+
+.swarm-table {
+  width: 100%; border-collapse: collapse;
+  th { color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+  td { padding: 0.625rem 0.75rem; border-bottom: 1px solid rgba(51, 65, 85, 0.15); color: var(--text-primary); vertical-align: middle; }
+  tr:hover td { background: rgba(99, 102, 241, 0.05); }
+  .sortable { cursor: pointer; user-select: none; &:hover { color: var(--text-primary); } }
+}
+
 @media (max-width: 768px) {
   :host { padding-top: 1rem; }
 }

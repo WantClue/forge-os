@@ -40,6 +40,10 @@ export class SwarmComponent implements OnInit, OnDestroy {
   public refreshIntervalControl: FormControl;
 
   public filterText = '';
+  public viewMode: 'grid' | 'list' = (localStorage.getItem('swarmView') as 'grid' | 'list') ?? 'grid';
+  public sortField = 'IP';
+  public sortDir: 1 | -1 = 1;
+  public readonly currentIP = window.location.hostname;
 
   constructor(
     private fb: FormBuilder,
@@ -335,17 +339,52 @@ export class SwarmComponent implements OnInit, OnDestroy {
   };
 
   get filteredSwarm() {
-    if (!this.filterText) {
-      return this.swarm;
+    let result = this.swarm;
+    if (this.filterText) {
+      const filter = this.filterText.toLowerCase();
+      result = result.filter(axe =>
+        axe.hostname?.toLowerCase().includes(filter) ||
+        axe.ASICModel?.toLowerCase().includes(filter) ||
+        axe.deviceModel?.toLowerCase().includes(filter) ||
+        axe.IP.includes(filter)
+      );
     }
+    return [...result].sort((a, b) => {
+      const av = a[this.sortField] ?? 0;
+      const bv = b[this.sortField] ?? 0;
+      if (typeof av === 'string') return this.sortDir * av.localeCompare(bv);
+      return this.sortDir * ((av as number) - (bv as number));
+    });
+  }
 
-    const filter = this.filterText.toLowerCase();
-    return this.swarm.filter(axe =>
-      axe.hostname.toLowerCase().includes(filter) ||
-      axe.ASICModel.toLowerCase().includes(filter) ||
-      axe.deviceModel.toLowerCase().includes(filter) ||
-      axe.IP.includes(filter)
-    );
+  public toggleView() {
+    this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
+    localStorage.setItem('swarmView', this.viewMode);
+  }
+
+  public setSort(field: string) {
+    if (this.sortField === field) {
+      this.sortDir = (this.sortDir === 1 ? -1 : 1) as 1 | -1;
+    } else {
+      this.sortField = field;
+      this.sortDir = -1;
+    }
+  }
+
+  public identify(axe: any) {
+    this.httpClient.post(`http://${axe.IP}/api/system/identify`, {}).pipe(
+      catchError(error => {
+        if (error.status === 0 || error.status === 200 || error.name === 'HttpErrorResponse') {
+          return of('success');
+        }
+        this.toastr.error(`Failed to identify device at ${axe.IP}`);
+        return of(null);
+      })
+    ).subscribe(res => {
+      if (res !== null) {
+        this.toastr.info(`Identifying device at ${axe.IP}`, 'Identify');
+      }
+    });
   }
 
   getDeviceNotification(axe: any): { color: string; msg: string } | undefined {

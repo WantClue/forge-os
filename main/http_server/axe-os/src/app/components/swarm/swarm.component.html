@@ -18,7 +18,7 @@
             </div>
         </div>
 
-        <div class="mt-2 mb-3 gap-2 sm:gap-3 flex justify-content-end">
+        <div class="mt-2 mb-3 gap-2 sm:gap-3 flex justify-content-between align-items-center flex-wrap">
             <div class="flex gap-2 sm:gap-3">
                 <div class="w-full p-input-icon-left relative">
                     <i class="pi pi-filter"></i>
@@ -41,22 +41,50 @@
                         (click)="filterText = ''" />
                 </div>
             </div>
+            <div class="flex gap-2 align-items-center">
+                <button pButton icon="pi pi-sort-alt" class="p-button-sm p-button-text"
+                    pTooltip="Sort by IP" tooltipPosition="top"
+                    [ngClass]="{'p-button-outlined': sortField === 'IP'}"
+                    (click)="setSort('IP')">IP</button>
+                <button pButton class="p-button-sm p-button-text"
+                    pTooltip="Sort by hashrate" tooltipPosition="top"
+                    [ngClass]="{'p-button-outlined': sortField === 'hashRate'}"
+                    (click)="setSort('hashRate')">TH/s</button>
+                <button pButton class="p-button-sm p-button-text"
+                    pTooltip="Sort by power" tooltipPosition="top"
+                    [ngClass]="{'p-button-outlined': sortField === 'power'}"
+                    (click)="setSort('power')">W</button>
+                <button pButton class="p-button-sm p-button-text"
+                    pTooltip="Sort by temperature" tooltipPosition="top"
+                    [ngClass]="{'p-button-outlined': sortField === 'temp'}"
+                    (click)="setSort('temp')">°C</button>
+                <span class="text-muted">|</span>
+                <p-button
+                    [icon]="viewMode === 'grid' ? 'pi pi-list' : 'pi pi-th-large'"
+                    pTooltip="Toggle view"
+                    tooltipPosition="top"
+                    severity="secondary"
+                    styleClass="button-icon-small"
+                    (click)="toggleView()" />
+            </div>
         </div>
 
         <ng-container *ngIf="filteredSwarm.length; else noFilterResults">
-            <div class="grid">
+            <!-- Grid View -->
+            <div class="grid" *ngIf="viewMode === 'grid'">
                 <div class="col-12 sm:col-6 xl:col-4" *ngFor="let axe of filteredSwarm">
                     <div class="card flex justify-content-between mb-0 h-full">
                         <div class="flex flex-column justify-content-between">
                             <div class="flex flex-column">
                                 <div class="flex flex-column">
-                                    <div class="white-space-nowrap">
+                                    <div class="white-space-nowrap flex align-items-center gap-1">
                                         <a [href]="'http://' + axe.IP" target="_blank" class="text-900" pTooltip="Hostname" tooltipPosition="top">
                                             {{axe.hostname}}
                                         </a>
                                         <span class="ml-1 text-lg line-height-1 cursor-pointer" [ngStyle]="{color: axe.swarmColor}" pTooltip="{{stringifyDeviceLabel(axe)}}" tooltipPosition="top">
                                             ●
                                         </span>
+                                        <i *ngIf="axe.IP === currentIP" class="pi pi-star-fill text-yellow-500 text-sm" pTooltip="This device" tooltipPosition="top"></i>
                                     </div>
                                     <a [href]="'http://' + axe.IP" target="_blank" class="text-800" pTooltip="IP" tooltipPosition="top">
                                         {{axe.IP}}
@@ -86,6 +114,14 @@
                                     severity="secondary"
                                     styleClass="button-icon-small"
                                     (click)="restart(axe)" />
+                                <p-button
+                                    icon="pi pi-lightbulb text-sm flex align-items-center justify-content-center"
+                                    pp-button
+                                    pTooltip="Identify"
+                                    tooltipPosition="top"
+                                    severity="secondary"
+                                    styleClass="button-icon-small"
+                                    (click)="identify(axe)" />
                                 <p-button
                                     icon="pi pi-trash text-sm flex align-items-center justify-content-center"
                                     pp-button
@@ -144,6 +180,52 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- List View -->
+            <div *ngIf="viewMode === 'list'" class="swarm-table-wrapper">
+                <table class="swarm-table">
+                    <thead>
+                        <tr>
+                            <th (click)="setSort('hostname')" class="sortable">Host <i class="pi" [ngClass]="sortField==='hostname' ? (sortDir===1 ? 'pi-sort-up' : 'pi-sort-down') : 'pi-sort'"></i></th>
+                            <th (click)="setSort('hashRate')" class="sortable">Hashrate <i class="pi" [ngClass]="sortField==='hashRate' ? (sortDir===1 ? 'pi-sort-up' : 'pi-sort-down') : 'pi-sort'"></i></th>
+                            <th (click)="setSort('power')" class="sortable">Power <i class="pi" [ngClass]="sortField==='power' ? (sortDir===1 ? 'pi-sort-up' : 'pi-sort-down') : 'pi-sort'"></i></th>
+                            <th (click)="setSort('temp')" class="sortable">Temp <i class="pi" [ngClass]="sortField==='temp' ? (sortDir===1 ? 'pi-sort-up' : 'pi-sort-down') : 'pi-sort'"></i></th>
+                            <th (click)="setSort('bestDiff')" class="sortable">Best Diff <i class="pi" [ngClass]="sortField==='bestDiff' ? (sortDir===1 ? 'pi-sort-up' : 'pi-sort-down') : 'pi-sort'"></i></th>
+                            <th (click)="setSort('uptimeSeconds')" class="sortable">Uptime <i class="pi" [ngClass]="sortField==='uptimeSeconds' ? (sortDir===1 ? 'pi-sort-up' : 'pi-sort-down') : 'pi-sort'"></i></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let axe of filteredSwarm">
+                            <td>
+                                <div class="flex align-items-center gap-1">
+                                    <a [href]="'http://' + axe.IP" target="_blank" class="text-900">{{axe.hostname}}</a>
+                                    <span [ngStyle]="{color: axe.swarmColor}" pTooltip="{{stringifyDeviceLabel(axe)}}" tooltipPosition="top">●</span>
+                                    <i *ngIf="axe.IP === currentIP" class="pi pi-star-fill text-yellow-500 text-xs" pTooltip="This device" tooltipPosition="top"></i>
+                                    <i *ngIf="getDeviceNotification(axe) as notification"
+                                        class="pi pi-exclamation-triangle text-sm"
+                                        pTooltip="{{ notification.msg }}" tooltipPosition="top"
+                                        [ngClass]="'text-' + notification.color + '-500'"></i>
+                                </div>
+                                <div class="text-500 text-sm">{{axe.IP}}</div>
+                            </td>
+                            <td>{{axe.hashRate * 1000000000 | hashSuffix}}</td>
+                            <td>{{axe.power | number: '1.1-1'}} W</td>
+                            <td [ngClass]="{'text-red-500': axe.temp > 70}">{{axe.temp | number: '1.0-1'}}°C</td>
+                            <td>{{axe.bestDiff | diffSuffix}}</td>
+                            <td>{{axe.uptimeSeconds | dateAgo: {intervals: 1} }}</td>
+                            <td>
+                                <div class="flex gap-1">
+                                    <p-button icon="pi pi-pencil" severity="secondary" styleClass="button-icon-small" pTooltip="Edit" tooltipPosition="top" (click)="edit(axe)" />
+                                    <p-button icon="pi pi-refresh" severity="secondary" styleClass="button-icon-small" pTooltip="Restart" tooltipPosition="top" (click)="restart(axe)" />
+                                    <p-button icon="pi pi-lightbulb" severity="secondary" styleClass="button-icon-small" pTooltip="Identify" tooltipPosition="top" (click)="identify(axe)" />
+                                    <p-button icon="pi pi-trash" severity="secondary" styleClass="button-icon-small" pTooltip="Remove" tooltipPosition="top" (click)="remove(axe)" />
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
             <div class="flex flex-wrap gap-2 mt-3 text-sm justify-content-center">

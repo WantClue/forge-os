@@ -118,6 +118,8 @@ export class EditComponent implements OnInit, OnDestroy {
           frequency: [info.frequency, [Validators.required]],
           autofanspeed: [info.autofanspeed == 1, [Validators.required]],
           fanspeed: [info.fanspeed, [Validators.required]],
+          fanTargetTemp: [info.fanTargetTemp ?? 45, [Validators.required, Validators.min(35), Validators.max(75)]],
+          fanMinSpeed: [info.fanMinSpeed ?? 35, [Validators.required, Validators.min(0), Validators.max(99)]],
           overheat_mode: [info.overheat_mode, [Validators.required]]
         });
 
@@ -127,8 +129,12 @@ export class EditComponent implements OnInit, OnDestroy {
         ).subscribe(autofanspeed => {
           if (autofanspeed) {
             this.form.controls['fanspeed'].disable();
+            this.form.controls['fanTargetTemp'].enable();
+            this.form.controls['fanMinSpeed'].enable();
           } else {
             this.form.controls['fanspeed'].enable();
+            this.form.controls['fanTargetTemp'].disable();
+            this.form.controls['fanMinSpeed'].disable();
           }
         });
       });

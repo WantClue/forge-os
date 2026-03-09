@@ -84,6 +84,21 @@
             </div>
         </div>
 
+        <div *ngIf="form.controls['autofanspeed'].value == true">
+            <div class="col-12">
+                <label>Target Temperature {{form.controls['fanTargetTemp'].value}}°C
+                    <small class="block text-color-secondary">Fan starts ramping up from this temperature (35–75°C)</small>
+                </label>
+                <p-slider formControlName="fanTargetTemp" [min]="35" [max]="75"></p-slider>
+            </div>
+            <div class="col-12 mt-3">
+                <label>Minimum Fan Speed {{form.controls['fanMinSpeed'].value}}%
+                    <small class="block text-color-secondary">Fan speed at or below target temperature (0–99%)</small>
+                </label>
+                <p-slider formControlName="fanMinSpeed" [min]="0" [max]="99"></p-slider>
+            </div>
+        </div>
+
         <div class="mt-2">
             <button pButton [disabled]="!form.dirty || form.invalid" (click)="updateSystem()"
                 class="btn btn-primary mr-2">Save</button>

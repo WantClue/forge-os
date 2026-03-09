@@ -192,11 +192,40 @@ table {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  flex-wrap: wrap;
 
   .control-button {
     min-width: auto !important;
     padding: 0.5rem 1rem !important;
     font-size: 0.875rem !important;
+  }
+
+  .control-filter {
+    font-size: 0.875rem;
+    padding: 0.4rem 0.75rem;
+    background: rgba(30, 41, 59, 0.8);
+    border-color: var(--card-border);
+    color: var(--text-primary);
+    border-radius: 0.5rem;
+    width: 160px;
+  }
+}
+
+// Fullscreen mode
+.logs-fullscreen-container {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+
+  #logs {
+    flex: 1;
+    height: auto !important;
+    border-radius: 0;
+    margin-top: 0;
   }
 }
 

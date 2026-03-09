@@ -398,11 +398,11 @@
             </div>
             <div class="info-content">
                 <div class="info-item" *ngFor="let output of info.coinbaseOutputs">
-                    <span class="info-label" [style.color]="output.isUserOutput ? 'var(--success-color)' : null" [style.font-weight]="output.isUserOutput ? '600' : null">
+                    <span class="info-label" [class.info-label--user]="output.isUserOutput">
                         {{ output.isUserOutput ? 'You' : 'Fee' }}
                     </span>
-                    <span class="info-value" style="font-family:monospace;font-size:.75rem;word-break:break-all">
-                        {{ output.address }} <span style="color:var(--text-muted);font-size:.7rem">({{ output.valueSatoshis / 100000000 | number:'1.8-8' }} BTC)</span>
+                    <span class="info-value coinbase-address">
+                        {{ output.address }} <span class="coinbase-value">({{ output.valueSatoshis / 100000000 | number:'1.8-8' }} BTC)</span>
                     </span>
                 </div>
             </div>
