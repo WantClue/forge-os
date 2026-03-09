@@ -303,3 +303,12 @@ uint32_t flip32(uint32_t val)
     ret |= (val & 0xFF000000) >> 24;
     return ret;
 }
+/* Calculate the network difficulty from nBits */
+double networkDifficulty(uint32_t nBits)
+{
+    uint32_t mantissa = nBits & 0x007fffff;
+    uint8_t exponent = (nBits >> 24) & 0xff;
+    double target = (double) mantissa * pow(256, (exponent - 3));
+    double difficulty = (pow(2, 208) * 65535) / target;
+    return difficulty;
+}

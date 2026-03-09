@@ -56,5 +56,9 @@ export interface ISystemInfo {
     chiptemp2?: number,
     overheat_mode: number,
     power_fault?: string
-    overclockEnabled?: number
+    overclockEnabled?: number,
+
+    blockHeight?: number,
+    scriptsig?: string,
+    networkDifficulty?: number,
 }

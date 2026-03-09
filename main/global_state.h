@@ -10,6 +10,7 @@
 #include "power_management_task.h"
 #include "serial.h"
 #include "stratum_api.h"
+#include "coinbase_decoder.h"
 #include "work_queue.h"
 
 #define STRATUM_USER CONFIG_STRATUM_USER
@@ -124,6 +125,14 @@ typedef struct
 
     uint32_t stratum_difficulty;
     uint32_t version_mask;
+
+    // Block header info (updated on each mining.notify)
+    int block_height;
+    char scriptsig[128];
+    uint64_t network_nonce_diff;
+    coinbase_output_t coinbase_outputs[MAX_COINBASE_TX_OUTPUTS];
+    int coinbase_output_count;
+    uint64_t coinbase_value_total_satoshis;
     bool new_stratum_version_rolling_msg;
 
     int sock;

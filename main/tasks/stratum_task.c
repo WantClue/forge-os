@@ -11,6 +11,7 @@
 #include "esp_wifi.h"
 #include <esp_sntp.h>
 #include <time.h>
+#include "coinbase_decoder.h"
 
 #define PORT CONFIG_STRATUM_PORT
 #define STRATUM_URL CONFIG_STRATUM_URL
@@ -179,6 +180,43 @@ void stratum_primary_heartbeat(void * pvParameters)
     }
 }
 
+static void decode_mining_notification(GlobalState * GLOBAL_STATE, const mining_notify * notification)
+{
+    if (!GLOBAL_STATE->extranonce_str) return;
+
+    mining_notification_result_t result;
+    memset(&result, 0, sizeof(result));
+
+    const char * user = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback
+        ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user
+        : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
+
+    if (coinbase_process_notification(notification,
+                                      GLOBAL_STATE->extranonce_str,
+                                      GLOBAL_STATE->extranonce_2_len,
+                                      user,
+                                      false,  // decode_outputs disabled by default
+                                      &result) != ESP_OK) {
+        return;
+    }
+
+    GLOBAL_STATE->network_nonce_diff = (uint64_t) result.network_difficulty;
+
+    if ((int)result.block_height != GLOBAL_STATE->block_height) {
+        ESP_LOGI(TAG, "Block height %d", result.block_height);
+        GLOBAL_STATE->block_height = result.block_height;
+    }
+
+    if (result.scriptsig) {
+        if (strcmp(result.scriptsig, GLOBAL_STATE->scriptsig) != 0) {
+            ESP_LOGI(TAG, "Scriptsig: %s", result.scriptsig);
+            strncpy(GLOBAL_STATE->scriptsig, result.scriptsig, sizeof(GLOBAL_STATE->scriptsig) - 1);
+            GLOBAL_STATE->scriptsig[sizeof(GLOBAL_STATE->scriptsig) - 1] = '\0';
+        }
+        free(result.scriptsig);
+    }
+}
+
 void stratum_task(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
@@ -308,6 +346,7 @@ void stratum_task(void * pvParameters)
 
             if (stratum_api_v1_message.method == MINING_NOTIFY) {
                 SYSTEM_notify_new_ntime(GLOBAL_STATE, stratum_api_v1_message.mining_notification->ntime);
+                decode_mining_notification(GLOBAL_STATE, stratum_api_v1_message.mining_notification);
                 if (stratum_api_v1_message.should_abandon_work &&
                     (GLOBAL_STATE->stratum_queue.count > 0 || GLOBAL_STATE->ASIC_jobs_queue.count > 0)) {
                     cleanQueue(GLOBAL_STATE);

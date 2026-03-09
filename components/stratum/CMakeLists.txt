@@ -3,6 +3,9 @@ SRCS
     "utils.c"
     "mining.c"
     "stratum_api.c"
+    "base58.c"
+    "segwit_addr.c"
+    "coinbase_decoder.c"
                     
 INCLUDE_DIRS
     "include"
