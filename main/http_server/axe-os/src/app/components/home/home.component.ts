@@ -434,6 +434,12 @@ export class HomeComponent {
     return `${prob.toFixed(prob < 1 ? 2 : 1)}%`
   }
 
+  public getWinProbabilityFull(bestDiff: number, networkDiff: number | undefined): string {
+    if (!networkDiff || networkDiff <= 0 || !bestDiff || bestDiff <= 0) return ''
+    const prob = (bestDiff / networkDiff) * 100
+    return `${prob.toPrecision(6)}%`
+  }
+
   public calculateEfficiencyAverage(hashrateData: number[], powerData: number[]): number {
     if (hashrateData.length === 0 || powerData.length === 0) return 0
 

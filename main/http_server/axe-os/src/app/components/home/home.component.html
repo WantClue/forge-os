@@ -114,12 +114,18 @@
             </div>
             <div class="metric-content">
                 <div class="metric-value">{{info.bestDiff | diffSuffix}}
-                    <span *ngIf="getWinProbability(info.bestDiff, info.networkDifficulty) as prob" style="font-size:0.6em;color:var(--text-muted);margin-left:0.4em">({{prob}})</span>
+                    <span *ngIf="getWinProbability(info.bestDiff, info.networkDifficulty) as prob"
+                          style="font-size:0.6em;color:var(--text-muted);margin-left:0.4em"
+                          [pTooltip]="getWinProbabilityFull(info.bestDiff, info.networkDifficulty)"
+                          tooltipPosition="top">({{prob}})</span>
                 </div>
                 <div class="metric-details">
                     <span class="metric-period">all-time best</span>
                     <span class="metric-change">{{info.bestSessionDiff}} since boot
-                        <span *ngIf="getWinProbability(info.bestSessionDiffValue || 0, info.networkDifficulty) as prob" style="color:var(--text-muted)">({{prob}})</span>
+                        <span *ngIf="getWinProbability(info.bestSessionDiffValue || 0, info.networkDifficulty) as prob"
+                              style="color:var(--text-muted)"
+                              [pTooltip]="getWinProbabilityFull(info.bestSessionDiffValue || 0, info.networkDifficulty)"
+                              tooltipPosition="top">({{prob}})</span>
                     </span>
                 </div>
             </div>
