@@ -25,6 +25,11 @@
         text="🔌 {{info.power_fault}} - Check your Power Supply">
     </p-message>
 
+    <p-message *ngIf="info.blockFound" severity="success"
+        styleClass="alert-message"
+        text="🎉 Block Found! Congratulations!">
+    </p-message>
+
     <!-- Key Metrics Grid -->
     <div class="metrics-grid">
         <div class="metric-card hash-rate">
@@ -44,16 +49,18 @@
                         <span class="metric-change">↗ {{calculateAverage(hashrateData) | hashSuffix}}</span>
                         <span class="metric-period">avg last 5 mins</span>
                     </div>
-                    <div class="metric-details" style="margin-top: 0.25rem; gap: 0.75rem;">
-                        <span *ngIf="info.expectedHashrate" class="metric-period">
-                            Expected: {{info.expectedHashrate * 1000000000 | hashSuffix}}
+                    <div class="metric-secondary">
+                        <span *ngIf="info.expectedHashrate" class="metric-stat">
+                            <span class="metric-stat__label">Expected</span>
+                            <span class="metric-stat__value">{{info.expectedHashrate * 1000000000 | hashSuffix}}</span>
                         </span>
                         <span *ngIf="info.errorPercentage != null"
+                              class="metric-stat"
+                              [class.metric-stat--error]="info.errorPercentage > 5"
                               [pTooltip]="'Hash error % reported by the ASIC. A small amount is normal. High values may indicate overclocking, undervoltage, or a bad power supply.'"
-                              tooltipPosition="bottom"
-                              class="metric-period"
-                              [class.text-red-400]="info.errorPercentage > 5">
-                            Err: {{info.errorPercentage | number:'1.2-2'}}%
+                              tooltipPosition="bottom">
+                            <span class="metric-stat__label">Error</span>
+                            <span class="metric-stat__value">{{info.errorPercentage | number:'1.2-2'}}%</span>
                         </span>
                     </div>
                 </ng-container>
@@ -273,6 +280,9 @@
             <div class="info-header">
                 <i class="pi pi-wifi info-icon"></i>
                 <span class="info-title">Pool Information</span>
+                <span class="status-badge ml-auto" [ngClass]="info.isUsingFallbackStratum ? 'fallback' : 'connected'">
+                    {{ info.isUsingFallbackStratum ? 'Fallback' : 'Connected' }}
+                </span>
             </div>
             <div class="info-content">
                 <div class="pool-info">
@@ -367,7 +377,7 @@
                 <div class="info-item" *ngIf="info.networkDifficulty">
                     <span class="info-label">Network Diff</span>
                     <span class="info-value"
-                          [pTooltip]="(info.networkDifficulty | number:'1.0-0')"
+                          [pTooltip]="(info.networkDifficulty | number:'1.0-0') ?? ''"
                           tooltipPosition="top">
                         {{info.networkDifficulty | diffSuffix}}
                     </span>
@@ -376,6 +386,23 @@
                     <span class="info-label">Scriptsig</span>
                     <span class="info-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">
                         {{info.scriptsig}}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-card" *ngIf="info.coinbaseOutputs?.length">
+            <div class="info-header">
+                <i class="pi pi-wallet info-icon"></i>
+                <span class="info-title">Payout Addresses</span>
+            </div>
+            <div class="info-content">
+                <div class="info-item" *ngFor="let output of info.coinbaseOutputs">
+                    <span class="info-label" [style.color]="output.isUserOutput ? 'var(--success-color)' : null" [style.font-weight]="output.isUserOutput ? '600' : null">
+                        {{ output.isUserOutput ? 'You' : 'Fee' }}
+                    </span>
+                    <span class="info-value" style="font-family:monospace;font-size:.75rem;word-break:break-all">
+                        {{ output.address }} <span style="color:var(--text-muted);font-size:.7rem">({{ output.valueSatoshis / 100000000 | number:'1.8-8' }} BTC)</span>
                     </span>
                 </div>
             </div>
