@@ -156,6 +156,24 @@
 
                 <div class="status-item">
                     <div class="status-item-header">
+                        <span>ASIC Current</span>
+                        <span class="status-value">{{info.current | number: '1.1-1'}}A</span>
+                    </div>
+                    <div class="progress-container">
+                        <p-progressBar [value]="(info.current / 42) * 100" styleClass="custom-progress">
+                            <ng-template pTemplate="content" let-value></ng-template>
+                        </p-progressBar>
+                        <div class="voltage-marker" [style.left]="(40 / 42) * 100 + '%'">
+                            <span class="marker-label">40A</span>
+                        </div>
+                    </div>
+                    <div class="status-warning" *ngIf="info.current > 40">
+                        ⚠️ High current draw
+                    </div>
+                </div>
+
+                <div class="status-item">
+                    <div class="status-item-header">
                         <span>ASIC Frequency</span>
                         <span class="status-value">{{info.frequency}} MHz</span>
                     </div>
