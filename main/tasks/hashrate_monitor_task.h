@@ -3,6 +3,8 @@
 
 #include "common.h"
 
+#define BM1370_HASH_DOMAINS 4
+
 typedef struct {
     uint32_t value;
     uint32_t time_ms;

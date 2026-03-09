@@ -11,7 +11,6 @@
 
 #define POLL_RATE 5000
 #define EMA_ALPHA 12
-#define BM1370_HASH_DOMAINS 4
 
 #define HASH_CNT_LSB 0x100000000uLL // Hash counters are incremented on difficulty 1 (2^32 hashes)
 #define HASHRATE_UNIT 0x100000uLL // Hashrate register unit (2^24 hashes)

@@ -313,6 +313,37 @@
             </div>
         </div>
 
+        <div class="info-card heatmap-card" *ngIf="info.hashrateMonitor && getAsicsAmount(info) > 0">
+            <div class="info-header">
+                <i class="pi pi-th-large info-icon"></i>
+                <span class="info-title">Hashrate Registers</span>
+            </div>
+            <div class="info-content">
+                <table class="heatmap" [class.heatmap--small]="getAsicsAmount(info) > 2">
+                    <thead>
+                        <tr>
+                            <th *ngIf="getAsicsAmount(info) > 1" class="heatmap-asic-col"></th>
+                            <th [attr.colspan]="getAsicDomainsAmount(info)" class="heatmap-domain-header">
+                                {{ getAsicDomainsAmount(info) === 1 ? 'Domain' : 'Domains' }}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let asic of info.hashrateMonitor!.asics; let i = index"
+                            [pTooltip]="(getAsicsAmount(info) > 1 ? 'ASIC ' + (i + 1) + ' — ' : '') + 'Errors: ' + asic.errorCount"
+                            tooltipPosition="bottom">
+                            <td *ngIf="getAsicsAmount(info) > 1" class="heatmap-asic-label">{{ i + 1 }}</td>
+                            <td *ngFor="let domain of asic.domains"
+                                [style.background]="getHeatmapColor(info, domain)"
+                                class="heatmap-cell">
+                                <span>{{ domain * 1000000000 | hashSuffix }}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="info-card" *ngIf="info.blockHeight">
             <div class="info-header">
                 <i class="pi pi-cube info-icon"></i>

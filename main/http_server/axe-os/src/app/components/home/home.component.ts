@@ -317,6 +317,31 @@ export class HomeComponent {
     return stratumURL.startsWith("http") ? stratumURL : `http://${stratumURL}`
   }
 
+  public getAsicsAmount(info: ISystemInfo): number {
+    return info.hashrateMonitor?.asics?.length ?? 0
+  }
+
+  public getAsicDomainsAmount(info: ISystemInfo): number {
+    return info.hashrateMonitor?.asics[0]?.domains?.length ?? 0
+  }
+
+  public getHeatmapColor(info: ISystemInfo, domainHashrate: number): string {
+    const expectedPerDomain = (info.expectedHashrate ?? 0) / this.getAsicDomainsAmount(info) / this.getAsicsAmount(info)
+    if (expectedPerDomain <= 0) return 'rgb(30, 41, 59)'
+
+    const ratio = Math.max(0, Math.min(2, domainHashrate / expectedPerDomain))
+    const deviation = Math.abs(ratio - 1)
+    const t = 1 - Math.pow(1 - deviation, 3)
+    const target = ratio > 1 ? 255 : 0
+
+    const r = 99, g = 102, b = 241 // #6366f1
+    const finalR = ((r * (1 - t) + target * t) | 0)
+    const finalG = ((g * (1 - t) + target * t) | 0)
+    const finalB = ((b * (1 - t) + target * t) | 0)
+
+    return `rgb(${finalR}, ${finalG}, ${finalB})`
+  }
+
   public calculateEfficiencyAverage(hashrateData: number[], powerData: number[]): number {
     if (hashrateData.length === 0 || powerData.length === 0) return 0
 

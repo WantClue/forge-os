@@ -5,6 +5,12 @@ interface ISharesRejectedStat {
     count: number;
 }
 
+interface IHashrateMonitorAsic {
+    total: number;
+    domains: number[];
+    errorCount: number;
+}
+
 export interface ISystemInfo {
 
     power: number,
@@ -61,4 +67,8 @@ export interface ISystemInfo {
     blockHeight?: number,
     scriptsig?: string,
     networkDifficulty?: number,
+
+    hashrateMonitor?: {
+        asics: IHashrateMonitorAsic[];
+    },
 }
