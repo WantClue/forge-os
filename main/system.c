@@ -86,8 +86,10 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->pool_decode_coinbase = (bool)nvs_config_get_u16(NVS_CONFIG_STRATUM_DECODE_COINBASE, 1);
     module->fallback_pool_decode_coinbase = (bool)nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_DECODE_COINBASE, 1);
 
-    // set fallback to false.
-    module->is_using_fallback = false;
+    // Load pool preference from NVS (default: primary pool)
+    module->is_using_fallback = nvs_config_get_u16(NVS_CONFIG_USE_FALLBACK_STRATUM, 0) != 0;
+    module->response_time = 0.0f;
+    module->share_submit_timestamp_us = 0;
 
     // Initialize overheat_mode
     module->overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);

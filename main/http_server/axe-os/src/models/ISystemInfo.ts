@@ -25,6 +25,7 @@ export interface ISystemInfo {
     errorPercentage?: number,
     bestDiff: number,
     bestSessionDiff: string,
+    bestSessionDiffValue?: number,
     freeHeap: number,
     freeHeapInternal: number,
     freeHeapSpiram: number,
@@ -78,6 +79,8 @@ export interface ISystemInfo {
     blockFound?: boolean,
     fanTargetTemp?: number,
     fanMinSpeed?: number,
+    responseTime?: number,
+    statsFrequency?: number,
 
     coinbaseOutputs?: { valueSatoshis: number, address: string, isUserOutput: boolean }[],
     coinbaseValueTotal?: number,

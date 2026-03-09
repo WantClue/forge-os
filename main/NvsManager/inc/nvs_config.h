@@ -29,6 +29,16 @@
 #define NVS_CONFIG_OVERCLOCK_ENABLED "oc_enabled"
 #define NVS_CONFIG_SWARM "swarmconfig"
 
+// Fan control settings
+#define NVS_CONFIG_FAN_TARGET_TEMP "fantargettemp"
+#define NVS_CONFIG_FAN_MIN_SPEED   "fanminspeed"
+
+// Pool management
+#define NVS_CONFIG_USE_FALLBACK_STRATUM "usefallback"
+
+// Statistics
+#define NVS_CONFIG_STATS_FREQUENCY "statsfreq"
+
 // Stratum advanced options
 #define NVS_CONFIG_STRATUM_DIFFICULTY              "stratumdiff"
 #define NVS_CONFIG_STRATUM_EXTRANONCE_SUBSCRIBE    "stratumxnsub"

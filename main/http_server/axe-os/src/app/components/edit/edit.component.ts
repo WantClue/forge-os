@@ -29,6 +29,17 @@ export class EditComponent implements OnInit, OnDestroy {
 
   @Input() uri = '';
 
+  public statsFrequencyOptions = [
+    { name: 'Off', value: 0 },
+    { name: '30s', value: 30 },
+    { name: '1 min', value: 60 },
+    { name: '2 min', value: 120 },
+    { name: '6 min', value: 360 },
+    { name: '14 min', value: 840 },
+    { name: '28 min', value: 1680 },
+    { name: '1 hour', value: 3600 },
+  ];
+
   public BM1370DropdownFrequency = [
     { name: '400', value: 400 },
     { name: '490', value: 490 },
@@ -120,7 +131,8 @@ export class EditComponent implements OnInit, OnDestroy {
           fanspeed: [info.fanspeed, [Validators.required]],
           fanTargetTemp: [info.fanTargetTemp ?? 45, [Validators.required, Validators.min(35), Validators.max(75)]],
           fanMinSpeed: [info.fanMinSpeed ?? 35, [Validators.required, Validators.min(0), Validators.max(99)]],
-          overheat_mode: [info.overheat_mode, [Validators.required]]
+          overheat_mode: [info.overheat_mode, [Validators.required]],
+          statsFrequency: [info.statsFrequency ?? 0, [Validators.required]],
         });
 
         this.form.controls['autofanspeed'].valueChanges.pipe(

@@ -113,10 +113,14 @@
                 <i class="pi pi-target metric-icon"></i>
             </div>
             <div class="metric-content">
-                <div class="metric-value">{{info.bestDiff | diffSuffix}}</div>
+                <div class="metric-value">{{info.bestDiff | diffSuffix}}
+                    <span *ngIf="getWinProbability(info.bestDiff, info.networkDifficulty) as prob" style="font-size:0.6em;color:var(--text-muted);margin-left:0.4em">({{prob}})</span>
+                </div>
                 <div class="metric-details">
                     <span class="metric-period">all-time best</span>
-                    <span class="metric-change">{{info.bestSessionDiff}} since boot</span>
+                    <span class="metric-change">{{info.bestSessionDiff}} since boot
+                        <span *ngIf="getWinProbability(info.bestSessionDiffValue || 0, info.networkDifficulty) as prob" style="color:var(--text-muted)">({{prob}})</span>
+                    </span>
                 </div>
             </div>
         </div>
@@ -316,6 +320,25 @@
                             <span class="info-value">{{info.fallbackStratumUser | truncateMiddle:10:8}}</span>
                         </div>
                     </ng-container>
+                    <div class="info-item" *ngIf="info.responseTime && info.responseTime > 0">
+                        <span class="info-label">Response</span>
+                        <span class="info-value">{{info.responseTime | number:'1.0-0'}} ms</span>
+                    </div>
+                    <div class="info-item" *ngIf="info.fallbackStratumURL">
+                        <span class="info-label">Switch</span>
+                        <span class="info-value" style="display:flex;gap:0.5rem">
+                            <button pButton type="button" label="Primary" icon="pi pi-arrow-left"
+                                class="p-button-sm p-button-text"
+                                [class.p-button-outlined]="!info.isUsingFallbackStratum"
+                                (click)="switchPool(false)">
+                            </button>
+                            <button pButton type="button" label="Fallback" icon="pi pi-arrow-right" iconPos="right"
+                                class="p-button-sm p-button-text"
+                                [class.p-button-outlined]="info.isUsingFallbackStratum"
+                                (click)="switchPool(true)">
+                            </button>
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -398,11 +421,11 @@
             </div>
             <div class="info-content">
                 <div class="info-item" *ngFor="let output of info.coinbaseOutputs">
-                    <span class="info-label" [class.info-label--user]="output.isUserOutput">
+                    <span class="info-label" [style.color]="output.isUserOutput ? 'var(--success-color)' : null" [style.font-weight]="output.isUserOutput ? '600' : null">
                         {{ output.isUserOutput ? 'You' : 'Fee' }}
                     </span>
-                    <span class="info-value coinbase-address">
-                        {{ output.address }} <span class="coinbase-value">({{ output.valueSatoshis / 100000000 | number:'1.8-8' }} BTC)</span>
+                    <span class="info-value" style="font-family:monospace;font-size:.75rem;word-break:break-all">
+                        {{ output.address }} <span style="color:var(--text-muted);font-size:.7rem">({{ output.valueSatoshis / 100000000 | number:'1.8-8' }} BTC)</span>
                     </span>
                 </div>
             </div>

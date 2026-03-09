@@ -1,4 +1,5 @@
 #include "esp_log.h"
+#include "esp_timer.h"
 // #include "addr_from_stdin.h"
 #include "connect.h"
 #include "system.h"
@@ -395,6 +396,16 @@ void stratum_task(void * pvParameters)
                 stratum_close_connection(GLOBAL_STATE);
                 break;
             } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
+                if (GLOBAL_STATE->SYSTEM_MODULE.share_submit_timestamp_us > 0) {
+                    float rtt = (esp_timer_get_time() - GLOBAL_STATE->SYSTEM_MODULE.share_submit_timestamp_us) / 1000.0f;
+                    // Exponential moving average (alpha=0.1) to smooth response time
+                    if (GLOBAL_STATE->SYSTEM_MODULE.response_time <= 0.0f) {
+                        GLOBAL_STATE->SYSTEM_MODULE.response_time = rtt;
+                    } else {
+                        GLOBAL_STATE->SYSTEM_MODULE.response_time = 0.9f * GLOBAL_STATE->SYSTEM_MODULE.response_time + 0.1f * rtt;
+                    }
+                    GLOBAL_STATE->SYSTEM_MODULE.share_submit_timestamp_us = 0;
+                }
                 if (stratum_api_v1_message.response_success) {
                     ESP_LOGI(TAG, "message result accepted");
                     SYSTEM_notify_accepted_share(GLOBAL_STATE);

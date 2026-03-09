@@ -4,6 +4,7 @@ import { HashSuffixPipe } from "src/app/pipes/hash-suffix.pipe"
 import { TruncateMiddlePipe } from "src/app/pipes/truncate-middle.pipe"
 import { SystemService } from "src/app/services/system.service"
 import type { ISystemInfo } from "src/models/ISystemInfo"
+import { ToastrService } from "ngx-toastr"
 
 @Component({
   selector: "app-home",
@@ -44,6 +45,7 @@ export class HomeComponent {
 
   constructor(
     private systemService: SystemService,
+    private toastr: ToastrService,
   ) {
     this.initializeChart()
   }
@@ -415,6 +417,21 @@ export class HomeComponent {
 
     this.chartData = { ...this.chartData }
     this.chartOptions = { ...this.chartOptions }
+  }
+
+  public switchPool(useFallback: boolean): void {
+    this.systemService.updateSystem('', { useFallbackStratum: useFallback ? 1 : 0 }).subscribe({
+      next: () => this.toastr.success(`Switched to ${useFallback ? 'fallback' : 'primary'} pool`, 'Pool Switch'),
+      error: () => this.toastr.error('Failed to switch pool', 'Error'),
+    })
+  }
+
+  public getWinProbability(bestDiff: number, networkDiff: number | undefined): string {
+    if (!networkDiff || networkDiff <= 0 || !bestDiff || bestDiff <= 0) return ''
+    const prob = (bestDiff / networkDiff) * 100
+    if (prob < 0.01) return `< 0.01%`
+    if (prob >= 100) return `100%`
+    return `${prob.toFixed(prob < 1 ? 2 : 1)}%`
   }
 
   public calculateEfficiencyAverage(hashrateData: number[], powerData: number[]): number {

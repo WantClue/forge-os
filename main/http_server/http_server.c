@@ -547,6 +547,17 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "overclockEnabled")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_OVERCLOCK_ENABLED, item->valueint);
     }
+    if ((item = cJSON_GetObjectItem(root, "useFallbackStratum")) != NULL) {
+        bool use_fallback = (bool)item->valueint;
+        GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback = use_fallback;
+        nvs_config_set_u16(NVS_CONFIG_USE_FALLBACK_STRATUM, use_fallback ? 1 : 0);
+        if (GLOBAL_STATE->sock >= 0) {
+            shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
+        }
+    }
+    if ((item = cJSON_GetObjectItem(root, "statsFrequency")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_STATS_FREQUENCY, item->valueint);
+    }
 
     cJSON_Delete(root);
     httpd_resp_send_chunk(req, NULL, 0);
@@ -656,9 +667,12 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "expectedHashrate", expected_hashrate);
     cJSON_AddNumberToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_nonce_diff);
     cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);
+    cJSON_AddNumberToObject(root, "bestSessionDiffValue", GLOBAL_STATE->SYSTEM_MODULE.best_session_nonce_diff);
     cJSON_AddNumberToObject(root, "stratumDiff", GLOBAL_STATE->stratum_difficulty);
 
     cJSON_AddNumberToObject(root, "isUsingFallbackStratum", GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback);
+    cJSON_AddNumberToObject(root, "responseTime", GLOBAL_STATE->SYSTEM_MODULE.response_time);
+    cJSON_AddNumberToObject(root, "statsFrequency", nvs_config_get_u16(NVS_CONFIG_STATS_FREQUENCY, 0));
 
     cJSON_AddNumberToObject(root, "isPSRAMAvailable", GLOBAL_STATE->psram_is_available);
 

@@ -5,6 +5,7 @@
 #include "serial.h"
 #include <string.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nvs_config.h"
 #include "utils.h"
 #include "stratum_task.h"
@@ -62,6 +63,7 @@ void ASIC_result_task(void *pvParameters)
         if (nonce_diff >= GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff)
         {
             char * user = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
+            GLOBAL_STATE->SYSTEM_MODULE.share_submit_timestamp_us = esp_timer_get_time();
             int ret = STRATUM_V1_submit_share(
                 GLOBAL_STATE->sock,
                 GLOBAL_STATE->send_uid++,
