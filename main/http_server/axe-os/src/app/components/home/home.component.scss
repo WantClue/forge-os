@@ -79,6 +79,18 @@
 
 .metric-status { font-size: 0.875rem; font-weight: 500; &.success { color: var(--success-color); } &.error { color: var(--error-color); } }
 
+.metric-secondary {
+  display: flex; gap: 1rem; margin-top: 0.5rem; padding-top: 0.5rem;
+  border-top: 1px solid var(--card-border);
+}
+
+.metric-stat {
+  display: flex; flex-direction: column; gap: 0.125rem;
+  &__label { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  &__value { color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; }
+  &--error .metric-stat__value { color: var(--error-color); }
+}
+
 .progress-container { position: relative; margin-bottom: 0.5rem; padding-top: 1.5rem; }
 .voltage-marker {
   position: absolute; top: 1.5rem; width: 2px; height: 8px; background: var(--success-color); box-shadow: 0 0 4px var(--success-color), 0 0 8px rgba(16, 185, 129, 0.3); z-index: 10;
