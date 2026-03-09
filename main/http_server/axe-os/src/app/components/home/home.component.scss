@@ -122,6 +122,14 @@
 
 .chart-content ::ng-deep .p-chart { background: transparent !important; canvas { border-radius: 12px; } }
 
+.chart-axis-selectors { display: flex; gap: 0.5rem; margin-left: auto; }
+::ng-deep .chart-axis-dropdown.p-dropdown {
+  background: rgba(30, 41, 59, 0.8); border-color: var(--card-border); font-size: 0.8rem; height: 2rem;
+  .p-dropdown-label { color: var(--text-secondary); padding: 0.3rem 0.5rem; font-size: 0.8rem; }
+  .p-dropdown-trigger { width: 1.75rem; color: var(--text-muted); }
+  &:hover { border-color: #6366f1; }
+}
+
 @media (max-width: 1200px) {
   .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
   .status-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }

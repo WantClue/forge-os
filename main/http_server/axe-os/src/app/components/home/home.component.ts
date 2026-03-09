@@ -19,14 +19,28 @@ export class HomeComponent {
   public chartOptions: any
   public dataLabel: number[] = []
   public hashrateData: number[] = []
-  public temperatureData: number[] = []
   public powerData: number[] = []
+  public chartY1Data: number[] = []
+  public chartY2Data: number[] = []
   public chartData?: any
 
   public maxPower = 0
   public nominalVoltage = 0
   public maxTemp = 75
   public maxFrequency = 800
+
+  public chartY1Key = localStorage.getItem('chartY1') ?? 'hashrate'
+  public chartY2Key = localStorage.getItem('chartY2') ?? 'temperature'
+
+  public readonly chartMetrics = [
+    { label: 'Hashrate',    key: 'hashrate' },
+    { label: 'Temperature', key: 'temperature' },
+    { label: 'Power',       key: 'power' },
+    { label: 'Efficiency',  key: 'efficiency' },
+    { label: 'Fan Speed',   key: 'fanspeed' },
+    { label: 'Error %',     key: 'errorPercentage' },
+    { label: 'None',        key: 'none' },
+  ]
 
   constructor(
     private systemService: SystemService,
@@ -95,7 +109,7 @@ export class HomeComponent {
       datasets: [
         {
           type: "line",
-          label: "Hash Rate (TH/s)",
+          label: this.getAxisLabel(this.chartY1Key),
           data: [],
           backgroundColor: 'rgba(99, 102, 241, 0.1)',
           borderColor: primaryColor,
@@ -108,7 +122,7 @@ export class HomeComponent {
         },
         {
           type: "line",
-          label: "Temperature (°C)",
+          label: this.getAxisLabel(this.chartY2Key),
           data: [],
           backgroundColor: 'rgba(234, 88, 12, 0.1)',
           borderColor: temperatureColor,
@@ -189,7 +203,7 @@ export class HomeComponent {
             font: {
               size: 12
             },
-            callback: (value: number) => HashSuffixPipe.transform(value),
+            callback: (value: number) => this.formatAxisValue(this.chartY1Key, value),
           },
           grid: {
             color: surfaceBorder,
@@ -206,13 +220,13 @@ export class HomeComponent {
             font: {
               size: 12
             },
-            callback: (value: number) => value + "°C",
+            callback: (value: number) => this.formatAxisValue(this.chartY2Key, value),
           },
           grid: {
             drawOnChartArea: false,
             color: surfaceBorder,
           },
-          suggestedMax: 80,
+          suggestedMax: this.maxTemp,
         },
       },
     }
@@ -226,26 +240,28 @@ export class HomeComponent {
         // Only collect and update chart data if there's no power fault
         if (!info.power_fault) {
           this.hashrateData.push(info.hashRate * 1000000000)
-          // Use the average of both ASIC chip temperatures for the chart
-          const avgTemp =
-            info.chiptemp1 && info.chiptemp2
-              ? (info.chiptemp1 + info.chiptemp2) / 2
-              : info.chiptemp1 || info.chiptemp2 || info.temp
-          this.temperatureData.push(avgTemp)
           this.powerData.push(info.power)
+          this.chartY1Data.push(this.getDataPoint(this.chartY1Key, info))
+          this.chartY2Data.push(this.getDataPoint(this.chartY2Key, info))
 
           this.dataLabel.push(new Date().getTime())
 
           if (this.hashrateData.length >= 720) {
             this.hashrateData.shift()
-            this.temperatureData.shift()
             this.powerData.shift()
+            this.chartY1Data.shift()
+            this.chartY2Data.shift()
             this.dataLabel.shift()
           }
 
+          const y1Max = this.getSuggestedMax(this.chartY1Key, info)
+          const y2Max = this.getSuggestedMax(this.chartY2Key, info)
+          if (y1Max !== undefined) this.chartOptions.scales.y.suggestedMax = y1Max
+          if (y2Max !== undefined) this.chartOptions.scales.y2.suggestedMax = y2Max
+
           this.chartData.labels = this.dataLabel
-          this.chartData.datasets[0].data = this.hashrateData
-          this.chartData.datasets[1].data = this.temperatureData
+          this.chartData.datasets[0].data = this.chartY1Data
+          this.chartData.datasets[1].data = this.chartY2Data
 
           // Force chart update with reference change
           this.chartData = {
@@ -340,6 +356,65 @@ export class HomeComponent {
     const finalB = ((b * (1 - t) + target * t) | 0)
 
     return `rgb(${finalR}, ${finalG}, ${finalB})`
+  }
+
+  public getAxisLabel(key: string): string {
+    return this.chartMetrics.find(m => m.key === key)?.label ?? key
+  }
+
+  public formatAxisValue(key: string, value: number): string {
+    switch (key) {
+      case 'hashrate':         return HashSuffixPipe.transform(value)
+      case 'temperature':      return value + '°C'
+      case 'power':            return value.toFixed(1) + 'W'
+      case 'efficiency':       return value.toFixed(1) + ' J/TH'
+      case 'fanspeed':         return value + '%'
+      case 'errorPercentage':  return value.toFixed(2) + '%'
+      default:                 return String(value)
+    }
+  }
+
+  private getSuggestedMax(key: string, info: ISystemInfo): number | undefined {
+    switch (key) {
+      case 'temperature':     return this.maxTemp
+      case 'power':           return Math.max(this.maxPower, 1)
+      case 'fanspeed':        return 100
+      case 'errorPercentage': return Math.max(10, (info.errorPercentage ?? 0) * 1.5)
+      default:                return undefined
+    }
+  }
+
+  private getDataPoint(key: string, info: ISystemInfo): number {
+    switch (key) {
+      case 'hashrate':        return info.hashRate * 1e9
+      case 'temperature':
+        if (info.chiptemp1 && info.chiptemp2) return (info.chiptemp1 + info.chiptemp2) / 2
+        return info.chiptemp1 || info.chiptemp2 || info.temp || 0
+      case 'power':           return info.power
+      case 'efficiency':      return info.hashRate > 0 ? info.power / (info.hashRate / 1000) : 0
+      case 'fanspeed':        return info.fanspeed
+      case 'errorPercentage': return info.errorPercentage ?? 0
+      default:                return 0
+    }
+  }
+
+  public onAxisChange(): void {
+    localStorage.setItem('chartY1', this.chartY1Key)
+    localStorage.setItem('chartY2', this.chartY2Key)
+
+    this.chartY1Data.length = 0
+    this.chartY2Data.length = 0
+
+    this.chartData.datasets[0].label = this.getAxisLabel(this.chartY1Key)
+    this.chartData.datasets[1].label = this.getAxisLabel(this.chartY2Key)
+
+    this.chartOptions.scales.y.display = this.chartY1Key !== 'none'
+    this.chartOptions.scales.y2.display = this.chartY2Key !== 'none'
+    this.chartOptions.scales.y.suggestedMax = undefined
+    this.chartOptions.scales.y2.suggestedMax = undefined
+
+    this.chartData = { ...this.chartData }
+    this.chartOptions = { ...this.chartOptions }
   }
 
   public calculateEfficiencyAverage(hashrateData: number[], powerData: number[]): number {

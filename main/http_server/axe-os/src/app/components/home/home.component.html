@@ -122,6 +122,16 @@
             <div class="chart-header">
                 <i class="pi pi-chart-line chart-icon"></i>
                 <span class="chart-title">Performance Overview</span>
+                <div class="chart-axis-selectors">
+                    <p-dropdown [options]="chartMetrics" optionLabel="label" optionValue="key"
+                        [(ngModel)]="chartY1Key" (ngModelChange)="onAxisChange()"
+                        styleClass="chart-axis-dropdown">
+                    </p-dropdown>
+                    <p-dropdown [options]="chartMetrics" optionLabel="label" optionValue="key"
+                        [(ngModel)]="chartY2Key" (ngModelChange)="onAxisChange()"
+                        styleClass="chart-axis-dropdown">
+                    </p-dropdown>
+                </div>
             </div>
             <div class="chart-content">
                 <p-chart [data]="chartData" [options]="chartOptions"></p-chart>
