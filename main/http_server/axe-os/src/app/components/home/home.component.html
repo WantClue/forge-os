@@ -156,22 +156,55 @@
 
                 <div class="status-item">
                     <div class="status-item-header">
-                        <span>ASIC Current</span>
+                        <span>Input Current</span>
                         <span class="status-value">{{info.current | number: '1.1-1'}}A</span>
                     </div>
                     <div class="progress-container">
-                        <p-progressBar [value]="(info.current / 42) * 100" styleClass="custom-progress">
+                        <p-progressBar [value]="(info.current / (info.maxPower / info.voltage * 1.1)) * 100" styleClass="custom-progress">
+                            <ng-template pTemplate="content" let-value></ng-template>
+                        </p-progressBar>
+                        <div class="voltage-marker" [style.left]="(1 / 1.1 * 100) + '%'">
+                            <span class="marker-label">{{info.maxPower / info.voltage | number:'1.1-1'}}A</span>
+                        </div>
+                    </div>
+                    <div class="status-warning" *ngIf="info.current > info.maxPower / info.voltage * 0.9">
+                        ⚠️ High current draw
+                    </div>
+                </div>
+
+                <div class="status-item">
+                    <div class="status-item-header">
+                        <span>VR Voltage</span>
+                        <span class="status-value">{{info.coreVoltageActual}}V</span>
+                    </div>
+                    <div class="progress-container">
+                        <p-progressBar [value]="(info.coreVoltageActual / 1.8) * 100" styleClass="custom-progress">
+                            <ng-template pTemplate="content" let-value></ng-template>
+                        </p-progressBar>
+                        <div class="voltage-marker" [style.left]="(info.coreVoltage / 1.8) * 100 + '%'">
+                            <span class="marker-label">{{info.coreVoltage}}V</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-item" *ngIf="info.vrCurrent != null && info.vrCurrent > 0">
+                    <div class="status-item-header">
+                        <span>VR Current</span>
+                        <span class="status-value">{{info.vrCurrent | number: '1.1-1'}}A</span>
+                    </div>
+                    <div class="progress-container">
+                        <p-progressBar [value]="(info.vrCurrent / 42) * 100" styleClass="custom-progress">
                             <ng-template pTemplate="content" let-value></ng-template>
                         </p-progressBar>
                         <div class="voltage-marker" [style.left]="(40 / 42) * 100 + '%'">
                             <span class="marker-label">40A</span>
                         </div>
                     </div>
-                    <div class="status-warning" *ngIf="info.current >= 38 && info.current < 40">
-                        ⚠️ High current draw
+                    <div class="status-warning" *ngIf="info.vrCurrent >= 38 && info.vrCurrent < 40">
+                        ⚠️ High VR current — approaching limit
                     </div>
-                    <div class="status-warning" *ngIf="info.current >= 40">
-                        🔥 Overcurrent — VR may shut down
+                    <div class="status-warning" *ngIf="info.vrCurrent >= 40">
+                        🔥 VR overcurrent — protection may activate
                     </div>
                 </div>
 
@@ -181,16 +214,6 @@
                         <span class="status-value">{{info.frequency}} MHz</span>
                     </div>
                     <p-progressBar [value]="(info.frequency / maxFrequency) * 100" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                </div>
-
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>Measured ASIC Voltage</span>
-                        <span class="status-value">{{info.coreVoltageActual}}V</span>
-                    </div>
-                    <p-progressBar [value]="(info.coreVoltageActual / 1.8) * 100" styleClass="custom-progress">
                         <ng-template pTemplate="content" let-value></ng-template>
                     </p-progressBar>
                 </div>

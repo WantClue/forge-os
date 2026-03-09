@@ -264,7 +264,7 @@ export class HomeComponent {
         info.power = Number.parseFloat(info.power.toFixed(1))
         info.voltage = Number.parseFloat((info.voltage / 1000).toFixed(1))
         info.current = Number.parseFloat((info.current / 1000).toFixed(1))
-        info.coreVoltageActual = Number.parseFloat((info.coreVoltageActual / 1000).toFixed(2))
+        info.coreVoltageActual = Number.parseFloat(info.coreVoltageActual.toFixed(3))
         info.coreVoltage = Number.parseFloat((info.coreVoltage / 1000).toFixed(2))
         info.temp = Number.parseFloat(info.temp.toFixed(1))
         if (info.chiptemp1) info.chiptemp1 = Number.parseFloat(info.chiptemp1.toFixed(1))
