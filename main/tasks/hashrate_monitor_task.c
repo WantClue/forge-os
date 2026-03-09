@@ -136,6 +136,11 @@ void hashrate_monitor_task(void *pvParameters)
             }
         }
 
+        float error_hashrate = sum_hashrates(HASHRATE_MONITOR_MODULE->error_measurement, asic_count);
+        HASHRATE_MONITOR_MODULE->error_percentage = HASHRATE_MONITOR_MODULE->hashrate > 0
+            ? error_hashrate / HASHRATE_MONITOR_MODULE->hashrate * 100.0f
+            : 0.0f;
+
         HASHRATE_MONITOR_MODULE->error_count = sum_values(HASHRATE_MONITOR_MODULE->error_measurement, asic_count);
 
         vTaskDelayUntil(&taskWakeTime, POLL_RATE / portTICK_PERIOD_MS);
