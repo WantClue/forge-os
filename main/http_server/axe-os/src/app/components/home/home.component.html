@@ -167,8 +167,11 @@
                             <span class="marker-label">40A</span>
                         </div>
                     </div>
-                    <div class="status-warning" *ngIf="info.current > 40">
+                    <div class="status-warning" *ngIf="info.current >= 38 && info.current < 40">
                         ⚠️ High current draw
+                    </div>
+                    <div class="status-warning" *ngIf="info.current >= 40">
+                        🔥 Overcurrent — VR may shut down
                     </div>
                 </div>
 
