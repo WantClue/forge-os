@@ -234,12 +234,19 @@
 
                 <div class="status-item">
                     <div class="status-item-header">
-                        <span>Fan Speed</span>
+                        <span>Fan 1 Speed</span>
                         <span class="status-value">{{info.fanspeed}}% ({{info.fanrpm}} RPM)</span>
                     </div>
                     <p-progressBar [value]="info.fanspeed" styleClass="custom-progress">
                         <ng-template pTemplate="content" let-value></ng-template>
                     </p-progressBar>
+                </div>
+
+                <div class="status-item" *ngIf="info.fan2rpm && info.fan2rpm > 0">
+                    <div class="status-item-header">
+                        <span>Fan 2 Speed</span>
+                        <span class="status-value">{{info.fan2rpm}} RPM</span>
+                    </div>
                 </div>
             </div>
         </div>

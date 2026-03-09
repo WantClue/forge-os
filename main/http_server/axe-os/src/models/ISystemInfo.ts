@@ -48,6 +48,7 @@ export interface ISystemInfo {
     autofanspeed: number,
     fanspeed: number,
     fanrpm: number,
+    fan2rpm?: number,
     coreVoltageActual: number,
 
     chiptemp1?: number,
