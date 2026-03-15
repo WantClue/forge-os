@@ -21,6 +21,7 @@ export class EditComponent implements OnInit, OnDestroy {
   public websiteUpdateProgress: number | null = null;
 
   public savedChanges: boolean = false;
+  public frequencyActual: number | undefined;
   public settingsUnlocked: boolean = false;
   public eASICModel = eASICModel;
   public ASICModel!: eASICModel;
@@ -103,6 +104,7 @@ export class EditComponent implements OnInit, OnDestroy {
       )
       .subscribe(info => {
         this.ASICModel = info.ASICModel;
+        this.frequencyActual = info.frequencyActual;
 
         // Check if overclock is enabled in NVS
         if (info.overclockEnabled === 1) {
@@ -118,7 +120,9 @@ export class EditComponent implements OnInit, OnDestroy {
           frequency: [info.frequency, [Validators.required]],
           autofanspeed: [info.autofanspeed == 1, [Validators.required]],
           manualFanSpeed: [info.manualFanSpeed, [Validators.required]],
-          overheat_mode: [info.overheat_mode, [Validators.required]]
+          overheat_mode: [info.overheat_mode, [Validators.required]],
+          thermalControl: [info.thermalControl == 1, [Validators.required]],
+          thermalTarget: [info.thermalTarget ?? 65, [Validators.required, Validators.min(45), Validators.max(72)]],
         });
 
         this.form.controls['autofanspeed'].valueChanges.pipe(
@@ -127,8 +131,22 @@ export class EditComponent implements OnInit, OnDestroy {
         ).subscribe(autofanspeed => {
           if (autofanspeed) {
             this.form.controls['manualFanSpeed'].disable();
+            this.form.controls['thermalControl'].setValue(false);
+            this.form.controls['thermalControl'].disable();
           } else {
             this.form.controls['manualFanSpeed'].enable();
+            this.form.controls['thermalControl'].enable();
+          }
+        });
+
+        this.form.controls['thermalControl'].valueChanges.pipe(
+          startWith(this.form.controls['thermalControl'].value),
+          takeUntil(this.destroy$)
+        ).subscribe(enabled => {
+          if (enabled) {
+            this.form.controls['thermalTarget'].enable();
+          } else {
+            this.form.controls['thermalTarget'].disable();
           }
         });
       });
@@ -146,6 +164,8 @@ export class EditComponent implements OnInit, OnDestroy {
     if (form.stratumPassword === '*****') {
       delete form.stratumPassword;
     }
+
+    form.thermalControl = form.thermalControl ? 1 : 0;
 
     this.systemService.updateSystem(this.uri, form)
       .pipe(this.loadingService.lockUIUntilComplete())

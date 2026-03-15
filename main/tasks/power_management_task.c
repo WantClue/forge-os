@@ -28,6 +28,12 @@
 #define TPS546_THROTTLE_TEMP 105.0
 #define TPS546_MAX_TEMP 145.0
 
+#define THERMAL_CTRL_STEP_MHZ   25.0f
+#define THERMAL_CTRL_MIN_MHZ    400.0f
+#define THERMAL_CTRL_MAX_MHZ    650.0f
+#define THERMAL_CTRL_HYSTERESIS 3.0f
+#define THERMAL_TARGET_DEFAULT  65
+
 static const char * TAG = "power_management";
 
 static bool even = false;
@@ -85,6 +91,55 @@ static double automatic_fan_speed(float chip_temp, float vr_temp, GlobalState * 
     return result;
 }
 
+// Adjust ASIC frequency to maintain target temperature.
+// Uses max(chip_temp_max, vr_temp_normalized) as effective temperature.
+// VR range 60-85°C is mapped to ASIC 45-75°C scale.
+static void thermal_control_adjust_frequency(PowerManagementModule * pm, float nvs_base_freq, GlobalState * GLOBAL_STATE)
+{
+    // Get max ASIC chip temperature
+    float chip_max = 0.0f;
+    if (pm->chip_temp[0] > 0.0f && pm->chip_temp[1] > 0.0f) {
+        chip_max = (pm->chip_temp[0] > pm->chip_temp[1]) ? pm->chip_temp[0] : pm->chip_temp[1];
+    } else if (pm->chip_temp[0] > 0.0f) {
+        chip_max = pm->chip_temp[0];
+    } else if (pm->chip_temp[1] > 0.0f) {
+        chip_max = pm->chip_temp[1];
+    } else {
+        chip_max = 50.0f; // fallback if both sensors zero
+    }
+
+    // Normalize VR temp to ASIC scale: 60-85°C → 45-75°C
+    float vr_normalized = 45.0f + (pm->vr_temp - 60.0f) * (30.0f / 25.0f);
+    float effective_temp = (chip_max > vr_normalized) ? chip_max : vr_normalized;
+
+    uint16_t target = nvs_config_get_u16(NVS_CONFIG_THERMAL_TARGET, THERMAL_TARGET_DEFAULT);
+    // Clamp target to valid range
+    if (target < 45) target = 45;
+    if (target > 72) target = 72;
+
+    float new_freq = pm->thermal_freq;
+
+    if (effective_temp > (float)target) {
+        new_freq -= THERMAL_CTRL_STEP_MHZ;
+        if (new_freq < THERMAL_CTRL_MIN_MHZ) new_freq = THERMAL_CTRL_MIN_MHZ;
+    } else if (effective_temp < (float)target - THERMAL_CTRL_HYSTERESIS) {
+        new_freq += THERMAL_CTRL_STEP_MHZ;
+        float ceiling = (nvs_base_freq < THERMAL_CTRL_MAX_MHZ) ? nvs_base_freq : THERMAL_CTRL_MAX_MHZ;
+        if (new_freq > ceiling) new_freq = ceiling;
+    } else {
+        return; // within dead band, no change
+    }
+
+    ESP_LOGI(TAG, "ThermalCtrl: eff=%.1f°C target=%u°C freq %.0f->%.0f MHz",
+             effective_temp, target, pm->thermal_freq, new_freq);
+
+    bool success = ASIC_set_frequency(GLOBAL_STATE, new_freq);
+    if (success) {
+        pm->thermal_freq = new_freq;
+        pm->frequency_value = new_freq;
+    }
+}
+
 void POWER_MANAGEMENT_task(void * pvParameters)
 {
     ESP_LOGI(TAG, "Starting");
@@ -95,13 +150,12 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     SystemModule * sys_module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     power_management->frequency_multiplier = 1;
-
-    //int last_frequency_increase = 0;
-    //uint16_t frequency_target = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
+    power_management->thermal_freq = (float)nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
+    uint16_t last_thermal_ctrl = nvs_config_get_u16(NVS_CONFIG_THERMAL_CTRL, 0);
 
     vTaskDelay(500 / portTICK_PERIOD_MS);
     uint16_t last_core_voltage = 0.0;
-    uint16_t last_asic_frequency = power_management->frequency_value;
+    uint16_t last_asic_frequency = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
     
     while (1) {
         PAC9544_selectChannel(even + 2U);
@@ -189,7 +243,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             Thermal_setFanSpeedPercent((float) fs / 100.0);
         }
 
-        // New voltage and frequency adjustment code
+        // Voltage adjustment
         uint16_t core_voltage = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
         uint16_t asic_frequency = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
 
@@ -199,17 +253,37 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             last_core_voltage = core_voltage;
         }
 
-        if (asic_frequency != last_asic_frequency) {
-            ESP_LOGI(TAG, "New ASIC frequency requested: %uMHz (current: %uMHz)", asic_frequency, last_asic_frequency);
-            
-            bool success = ASIC_set_frequency(GLOBAL_STATE, (float)asic_frequency);
-            
-            if (success) {
-                power_management->frequency_value = (float)asic_frequency;
+        // Thermal control / frequency adjustment
+        uint16_t thermal_ctrl_enabled = nvs_config_get_u16(NVS_CONFIG_THERMAL_CTRL, 0);
+
+        if (thermal_ctrl_enabled) {
+            // Clamp thermal_freq ceiling to current NVS base freq in case user lowered it
+            if (power_management->thermal_freq > (float)asic_frequency) {
+                power_management->thermal_freq = (float)asic_frequency;
             }
-            
-            last_asic_frequency = asic_frequency;
+            thermal_control_adjust_frequency(power_management, (float)asic_frequency, GLOBAL_STATE);
+            last_asic_frequency = (uint16_t)power_management->thermal_freq;
+        } else {
+            if (last_thermal_ctrl) {
+                // Thermal control was just disabled — restore NVS base frequency
+                ESP_LOGI(TAG, "ThermalCtrl disabled, restoring NVS freq %uMHz", asic_frequency);
+                bool success = ASIC_set_frequency(GLOBAL_STATE, (float)asic_frequency);
+                if (success) {
+                    power_management->frequency_value = (float)asic_frequency;
+                    power_management->thermal_freq = (float)asic_frequency;
+                }
+                last_asic_frequency = asic_frequency;
+            } else if (asic_frequency != last_asic_frequency) {
+                ESP_LOGI(TAG, "New ASIC frequency requested: %uMHz (current: %uMHz)", asic_frequency, last_asic_frequency);
+                bool success = ASIC_set_frequency(GLOBAL_STATE, (float)asic_frequency);
+                if (success) {
+                    power_management->frequency_value = (float)asic_frequency;
+                    power_management->thermal_freq = (float)asic_frequency;
+                }
+                last_asic_frequency = asic_frequency;
+            }
         }
+        last_thermal_ctrl = thermal_ctrl_enabled;
 
         // Check for changing of overheat mode
         uint16_t new_overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);

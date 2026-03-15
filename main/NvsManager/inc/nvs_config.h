@@ -27,6 +27,8 @@
 #define NVS_CONFIG_PRODUCTION_TEST "productiontest"
 #define NVS_CONFIG_OVERHEAT_MODE "overheat_mode"
 #define NVS_CONFIG_OVERCLOCK_ENABLED "oc_enabled"
+#define NVS_CONFIG_THERMAL_CTRL   "thermalctrl"
+#define NVS_CONFIG_THERMAL_TARGET "thermaltarget"
 #define NVS_CONFIG_SWARM "swarmconfig"
 
 // Theme configuration

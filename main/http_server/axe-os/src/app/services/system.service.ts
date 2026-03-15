@@ -68,7 +68,10 @@ export class SystemService {
 
           chiptemp1: 30,
           chiptemp2: 40,
-          overheat_mode: 0
+          overheat_mode: 0,
+          thermalControl: 0,
+          thermalTarget: 65,
+          frequencyActual: 525,
         }
       ).pipe(delay(1000));
     }

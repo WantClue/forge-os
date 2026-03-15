@@ -84,6 +84,27 @@
             </div>
         </div>
 
+        <!-- Thermal Control Section (manual fan mode only) -->
+        <div class="col-12" *ngIf="form.controls['autofanspeed'].value != true">
+            <div class="field-checkbox">
+                <p-checkbox name="thermalControl" formControlName="thermalControl" inputId="thermalControl"
+                    [binary]="true"></p-checkbox>
+                <label for="thermalControl">Thermal Control (Auto-Frequency)</label>
+            </div>
+        </div>
+
+        <div *ngIf="form.controls['thermalControl'].value == true">
+            <div class="col-12">
+                <label>Target Temperature: {{form.controls['thermalTarget'].value}}°C</label>
+                <p-slider formControlName="thermalTarget" [min]="45" [max]="72" [step]="1"></p-slider>
+                <small class="block mt-1" style="color: #aaa;">
+                    Frequency adjusts automatically (±25 MHz every 2s) to maintain this temperature.
+                    Both ASIC chip temp and VR temperature are monitored.
+                    <span *ngIf="frequencyActual">Current running frequency: {{frequencyActual}} MHz</span>
+                </small>
+            </div>
+        </div>
+
         <div class="mt-2">
             <button pButton [disabled]="!form.dirty || form.invalid" (click)="updateSystem()"
                 class="btn btn-primary mr-2">Save</button>

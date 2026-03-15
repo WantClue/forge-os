@@ -56,4 +56,7 @@ export interface ISystemInfo {
     overheat_mode: number,
     power_fault?: string
     overclockEnabled?: number
+    frequencyActual?: number,
+    thermalControl?: number,
+    thermalTarget?: number,
 }

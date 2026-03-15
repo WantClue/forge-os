@@ -16,6 +16,7 @@ typedef struct
     float frequency_value;
     float power;
     float current;
+    float thermal_freq;  // current thermally-adjusted running frequency (MHz)
 } PowerManagementModule;
 
 void POWER_MANAGEMENT_task(void * pvParameters);

@@ -591,6 +591,15 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "overclockEnabled")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_OVERCLOCK_ENABLED, item->valueint);
     }
+    if ((item = cJSON_GetObjectItem(root, "thermalControl")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_THERMAL_CTRL, item->valueint);
+    }
+    if ((item = cJSON_GetObjectItem(root, "thermalTarget")) != NULL) {
+        uint16_t target = (uint16_t)item->valueint;
+        if (target < 45) target = 45;
+        if (target > 72) target = 72;
+        nvs_config_set_u16(NVS_CONFIG_THERMAL_TARGET, target);
+    }
 
     cJSON_Delete(root);
     httpd_resp_send_chunk(req, NULL, 0);
@@ -683,6 +692,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
     cJSON_AddNumberToObject(root, "coreVoltageActual", VCORE_get_voltage_mv(GLOBAL_STATE));
     cJSON_AddNumberToObject(root, "frequency", nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
+    cJSON_AddNumberToObject(root, "frequencyActual", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.thermal_freq);
+    cJSON_AddNumberToObject(root, "thermalControl", nvs_config_get_u16(NVS_CONFIG_THERMAL_CTRL, 0));
+    cJSON_AddNumberToObject(root, "thermalTarget", nvs_config_get_u16(NVS_CONFIG_THERMAL_TARGET, 65));
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "macAddr", formattedMac);
     cJSON_AddStringToObject(root, "hostname", hostname);
