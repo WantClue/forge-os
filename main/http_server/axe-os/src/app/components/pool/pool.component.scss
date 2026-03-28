@@ -79,6 +79,60 @@
   }
 }
 
+// TabView Styling
+::ng-deep .p-tabview {
+  .p-tabview-nav-container {
+    margin-bottom: 1.5rem;
+  }
+
+  .p-tabview-nav {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--card-border);
+    gap: 0.5rem;
+
+    li {
+      .p-tabview-nav-link {
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--text-secondary);
+        font-weight: 500;
+        padding: 0.75rem 1.25rem;
+        margin-bottom: -2px;
+        transition: all 0.3s ease;
+        gap: 0.5rem;
+
+        .p-tabview-left-icon {
+          margin-right: 0.5rem;
+        }
+
+        &:hover {
+          color: var(--text-primary);
+          background: rgba(99, 102, 241, 0.05);
+          border-bottom-color: rgba(99, 102, 241, 0.3);
+        }
+
+        &:focus {
+          box-shadow: none;
+        }
+      }
+
+      &.p-highlight .p-tabview-nav-link {
+        background: transparent;
+        color: #6366f1;
+        border-bottom-color: #6366f1;
+      }
+    }
+  }
+
+  .p-tabview-panels {
+    background: transparent;
+    padding: 1.5rem 0 0;
+    border: none;
+  }
+}
+
 // Form Elements
 .field {
   margin-bottom: 1.5rem;
