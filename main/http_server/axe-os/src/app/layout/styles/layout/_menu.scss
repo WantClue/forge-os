@@ -8,8 +8,7 @@
     top: 0;
     left: 0;
     transition: transform $transitionDuration, left $transitionDuration;
-    background: rgba(30, 41, 59, 0.95);
-    backdrop-filter: blur(16px);
+    background: rgb(30, 41, 59);
     border-right: 1px solid rgba(51, 65, 85, 0.8);
     padding: 0;
     box-shadow: none;

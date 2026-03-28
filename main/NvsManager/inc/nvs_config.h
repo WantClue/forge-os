@@ -31,11 +31,6 @@
 #define NVS_CONFIG_THERMAL_TARGET "thermaltarget"
 #define NVS_CONFIG_SWARM "swarmconfig"
 
-// Theme configuration
-#define NVS_CONFIG_THEME_SCHEME "themescheme"
-#define NVS_CONFIG_THEME_NAME "themename"
-#define NVS_CONFIG_THEME_COLORS "themecolors"
-
 char * nvs_config_get_string(const char * key, const char * default_value);
 void nvs_config_set_string(const char * key, const char * default_value);
 uint16_t nvs_config_get_u16(const char * key, const uint16_t default_value);

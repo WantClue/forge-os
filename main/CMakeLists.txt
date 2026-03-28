@@ -11,7 +11,6 @@ SRCS
     "lv_font_portfolio-6x8.c"
     "logo.c"
     "./http_server/http_server.c"
-    "./http_server/theme_api.c"
     "./self_test/self_test.c"
     "./tasks/stratum_task.c"
     "./tasks/create_jobs_task.c"

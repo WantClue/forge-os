@@ -16,8 +16,7 @@
 
 // Base card styles - Matching home component
 %base-card {
-  background: var(--card-bg);
-  backdrop-filter: blur(12px);
+  background: rgba(30, 41, 59, 0.95);
   border: 1px solid var(--card-border);
   border-radius: 1rem;
   padding: 1.5rem;

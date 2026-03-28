@@ -17,8 +17,7 @@
 
 // Base card styles - Matching home component
 %base-card {
-  background: var(--card-bg);
-  backdrop-filter: blur(12px);
+  background: rgba(30, 41, 59, 0.95);
   border: 1px solid var(--card-border);
   border-radius: 1rem;
   padding: 1.5rem;
@@ -132,7 +131,7 @@ table {
   overflow-x: hidden;
   padding: 1rem;
   margin-top: 1rem;
-  backdrop-filter: blur(4px);
+
 
   // Custom scrollbar
   &::-webkit-scrollbar {

@@ -12,13 +12,12 @@
 }
 
 %base-card {
-  background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--card-border); border-radius: 1rem; padding: 1.5rem;
+  background: rgba(30, 41, 59, 0.95); border: 1px solid var(--card-border); border-radius: 1rem; padding: 1.5rem;
 }
 
 ::ng-deep .alert-message {
   margin-bottom: 1.5rem;
   border-radius: 0.75rem;
-  backdrop-filter: blur(8px);
   &.p-message-error { background: rgba(239, 68, 68, 0.1) !important; border-color: rgba(239, 68, 68, 0.3) !important; color: #fca5a5 !important; }
   &.p-message-warn { background: rgba(245, 158, 11, 0.1) !important; border-color: rgba(245, 158, 11, 0.3) !important; color: #fcd34d !important; }
 }

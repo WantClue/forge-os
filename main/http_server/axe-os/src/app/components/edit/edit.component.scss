@@ -293,7 +293,6 @@
 // Alert Messages
 ::ng-deep .p-message {
   border-radius: 0.75rem !important;
-  backdrop-filter: blur(8px);
   margin-bottom: 1.5rem;
 
   &.p-message-warn {
@@ -400,7 +399,6 @@
     padding: 0.5rem 0.75rem;
     color: var(--text-primary);
     font-size: 0.875rem;
-    backdrop-filter: blur(8px);
   }
 
   .p-tooltip-arrow {

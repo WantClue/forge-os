@@ -7,8 +7,7 @@
     top: 0;
     width: 100%;
     padding: 1.5rem 2rem 1.5rem 274px; // Account for sidebar width
-    background: rgba(30, 41, 59, 0.95);
-    backdrop-filter: blur(16px);
+    background: rgb(30, 41, 59);
     border-bottom: 1px solid rgba(51, 65, 85, 0.8);
     transition: left $transitionDuration;
     display: flex;
@@ -95,7 +94,7 @@
                     height: 8px;
                     border-radius: 50%;
                     background: currentColor;
-                    animation: pulse 2s infinite;
+                    animation: pulse 2s 3;
                 }
             }
 
@@ -261,8 +260,7 @@
             top: 1rem;
             left: 1rem;
             z-index: 1000;
-            background: rgba(30, 41, 59, 0.95);
-            backdrop-filter: blur(8px);
+            background: rgb(30, 41, 59);
             border-radius: 0.5rem;
         }
 

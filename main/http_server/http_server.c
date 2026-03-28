@@ -36,7 +36,6 @@
 #include "connect.h"
 #include "asic.h"
 #include "TPS546.h"
-#include "theme_api.h"  // Add theme API include
 #include "http_server.h"
 
 static const char * TAG = "http_server";
@@ -1099,9 +1098,6 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &recovery_explicit_get_uri);
-    
-    // Register theme API endpoints
-    ESP_ERROR_CHECK(register_theme_api_endpoints(server, rest_context));
 
     /* URI handler for fetching system info */
     httpd_uri_t system_info_get_uri = {
