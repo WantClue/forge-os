@@ -1,10 +1,10 @@
 import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
-import { Component, ViewChild } from '@angular/core';
+import { Component, OnDestroy, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { FileUploadHandlerEvent, FileUpload } from 'primeng/fileupload';
-import { map, Observable, shareReplay, startWith } from 'rxjs';
-import { GithubUpdateService } from 'src/app/services/github-update.service';
+import { map, Observable, shareReplay, startWith, Subscription } from 'rxjs';
+import { GithubRelease, GithubUpdateService } from 'src/app/services/github-update.service';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
 import { eASICModel } from 'src/models/enum/eASICModel';
@@ -14,7 +14,7 @@ import { eASICModel } from 'src/models/enum/eASICModel';
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']
 })
-export class SettingsComponent {
+export class SettingsComponent implements OnDestroy {
 
   public form!: FormGroup;
 
@@ -27,6 +27,15 @@ export class SettingsComponent {
 
   public checkLatestRelease: boolean = false;
   public latestRelease$: Observable<any>;
+  public releases$!: Observable<GithubRelease[]>;
+  public selectedRelease: GithubRelease | null = null;
+
+  // GitHub OTA state
+  public isGithubOTA: boolean = false;
+  public githubOTAStep: string = 'idle';
+  public githubOTAProgress: number = 0;
+  private otaPollSub: Subscription | null = null;
+  private rebootCheckSub: Subscription | null = null;
 
   public info$: Observable<any>;
 
@@ -86,6 +95,14 @@ export class SettingsComponent {
       });
 
   }
+
+  ngOnDestroy() {
+    this.stopOTAPolling();
+    if (this.rebootCheckSub) {
+      this.rebootCheckSub.unsubscribe();
+    }
+  }
+
   public updateSystem() {
 
     const form = this.form.getRawValue();
@@ -189,6 +206,132 @@ export class SettingsComponent {
           this.websiteUpdateProgress = null;
         }
       });
+  }
+
+  public loadReleases() {
+    this.checkLatestRelease = true;
+    this.releases$ = this.githubUpdateService.getReleases();
+  }
+
+  public onReleaseSelected(release: GithubRelease) {
+    this.selectedRelease = release;
+  }
+
+  public getStepLabel(step: string): string {
+    switch (step) {
+      case 'downloading_fw': return 'Downloading firmware...';
+      case 'flashing_fw': return 'Downloading & flashing firmware...';
+      case 'downloading_www': return 'Downloading website...';
+      case 'flashing_www': return 'Flashing website...';
+      case 'rebooting': return 'Rebooting...';
+      case 'error': return 'Error';
+      default: return 'Starting...';
+    }
+  }
+
+  public installFromGithub() {
+    if (!this.selectedRelease) return;
+
+    const fwUrl = this.githubUpdateService.findAssetUrl(this.selectedRelease, 'bitforgeos.bin');
+    const wwwUrl = this.githubUpdateService.findAssetUrl(this.selectedRelease, 'www.bin');
+
+    if (!fwUrl || !wwwUrl) {
+      this.toastrService.error('Release is missing bitforgeos.bin or www.bin assets', 'Error');
+      return;
+    }
+
+    this.isGithubOTA = true;
+    this.githubOTAStep = 'idle';
+    this.githubOTAProgress = 0;
+
+    this.systemService.startGithubOTA(fwUrl, wwwUrl).subscribe({
+      next: () => {
+        this.toastrService.info('Update started', 'GitHub OTA');
+        this.startOTAPolling();
+      },
+      error: (err) => {
+        this.isGithubOTA = false;
+        const msg = err.error?.message || err.message || 'Failed to start update';
+        this.toastrService.error(msg, 'Error');
+      }
+    });
+  }
+
+  private startOTAPolling() {
+    this.stopOTAPolling();
+
+    const poll = () => {
+      this.otaPollSub = this.systemService.getGithubOTAStatus().subscribe({
+        next: (status) => {
+          this.githubOTAStep = status.step;
+          this.githubOTAProgress = status.progress;
+
+          if (status.step === 'rebooting') {
+            this.stopOTAPolling();
+            this.toastrService.success('Update complete! Device is rebooting...', 'Success');
+            this.startRebootCheck();
+            return;
+          }
+
+          if (status.step === 'error') {
+            this.stopOTAPolling();
+            this.isGithubOTA = false;
+            this.toastrService.error(status.error || 'Update failed', 'Error');
+            return;
+          }
+
+          if (status.running) {
+            setTimeout(() => poll(), 1000);
+          } else {
+            this.isGithubOTA = false;
+          }
+        },
+        error: () => {
+          // Device may have rebooted, start checking
+          this.stopOTAPolling();
+          this.startRebootCheck();
+        }
+      });
+    };
+
+    poll();
+  }
+
+  private stopOTAPolling() {
+    if (this.otaPollSub) {
+      this.otaPollSub.unsubscribe();
+      this.otaPollSub = null;
+    }
+  }
+
+  private startRebootCheck() {
+    let attempts = 0;
+    const maxAttempts = 60;
+
+    const check = () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        this.isGithubOTA = false;
+        this.toastrService.warning('Device did not come back online within 60 seconds', 'Warning');
+        return;
+      }
+
+      this.rebootCheckSub = this.systemService.getInfo().subscribe({
+        next: () => {
+          // Device is back!
+          this.isGithubOTA = false;
+          this.toastrService.success('Device is back online! Reloading...', 'Success');
+          setTimeout(() => window.location.reload(), 1500);
+        },
+        error: () => {
+          // Not back yet, retry
+          setTimeout(() => check(), 1000);
+        }
+      });
+    };
+
+    // Wait 5 seconds before first check
+    setTimeout(() => check(), 5000);
   }
 
   public restart() {

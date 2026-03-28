@@ -37,6 +37,7 @@
 #include "asic.h"
 #include "TPS546.h"
 #include "http_server.h"
+#include "handler_ota_github.h"
 
 static const char * TAG = "http_server";
 static const char * CORS_TAG = "CORS";
@@ -191,7 +192,7 @@ static uint32_t extract_origin_ip_addr(char *origin)
     return origin_ip_addr;
 }
 
-static esp_err_t is_network_allowed(httpd_req_t * req)
+esp_err_t is_network_allowed(httpd_req_t * req)
 {
     if (GLOBAL_STATE->SYSTEM_MODULE.ap_enabled == true) {
         ESP_LOGD(CORS_TAG, "Device in AP mode. Allowing CORS.");
@@ -292,7 +293,7 @@ static esp_err_t set_content_type_from_file(httpd_req_t * req, const char * file
     return httpd_resp_set_type(req, type);
 }
 
-static esp_err_t set_cors_headers(httpd_req_t * req)
+esp_err_t set_cors_headers(httpd_req_t * req)
 {
 
     esp_err_t err;
@@ -1074,7 +1075,7 @@ esp_err_t start_rest_server(void * pvParameters)
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192;
     config.max_open_sockets = 10;
-    config.max_uri_handlers = 20;
+    config.max_uri_handlers = 24;
 
     ESP_LOGI(TAG, "Starting HTTP Server");
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
@@ -1188,12 +1189,37 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_register_uri_handler(server, &update_post_ota_firmware);
 
     httpd_uri_t update_post_ota_www = {
-        .uri = "/api/system/OTAWWW", 
-        .method = HTTP_POST, 
-        .handler = POST_WWW_update, 
+        .uri = "/api/system/OTAWWW",
+        .method = HTTP_POST,
+        .handler = POST_WWW_update,
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &update_post_ota_www);
+
+    /* URI handlers for GitHub OTA update */
+    httpd_uri_t ota_github_post_uri = {
+        .uri = "/api/system/OTA/github",
+        .method = HTTP_POST,
+        .handler = POST_OTA_github,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &ota_github_post_uri);
+
+    httpd_uri_t ota_github_get_uri = {
+        .uri = "/api/system/OTA/github",
+        .method = HTTP_GET,
+        .handler = GET_OTA_github_status,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &ota_github_get_uri);
+
+    httpd_uri_t ota_github_options_uri = {
+        .uri = "/api/system/OTA/github",
+        .method = HTTP_OPTIONS,
+        .handler = handle_options_request,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &ota_github_options_uri);
 
     httpd_uri_t ws = {
         .uri = "/api/ws", 

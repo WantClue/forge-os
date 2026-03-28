@@ -7,6 +7,7 @@ import { FileUploadModule } from 'primeng/fileupload';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputTextModule } from 'primeng/inputtext';
+import { ProgressBarModule } from 'primeng/progressbar';
 import { SidebarModule } from 'primeng/sidebar';
 import { SliderModule } from 'primeng/slider';
 
@@ -21,6 +22,7 @@ const primeNgModules = [
     ChartModule,
     InputGroupModule,
     InputGroupAddonModule,
+    ProgressBarModule,
 ];
 
 @NgModule({

@@ -121,6 +121,14 @@ export class SystemService {
   }
 
 
+  public startGithubOTA(fwUrl: string, wwwUrl: string): Observable<any> {
+    return this.httpClient.post('/api/system/OTA/github', { fw_url: fwUrl, www_url: wwwUrl });
+  }
+
+  public getGithubOTAStatus(): Observable<any> {
+    return this.httpClient.get('/api/system/OTA/github');
+  }
+
   public getSwarmInfo(uri: string = ''): Observable<{ ip: string }[]> {
     return this.httpClient.get(`${uri}/api/swarm/info`) as Observable<{ ip: string }[]>;
   }
