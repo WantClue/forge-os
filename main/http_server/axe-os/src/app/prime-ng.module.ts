@@ -9,6 +9,7 @@ import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputTextModule } from 'primeng/inputtext';
 import { SidebarModule } from 'primeng/sidebar';
 import { SliderModule } from 'primeng/slider';
+import { TabViewModule } from 'primeng/tabview';
 
 const primeNgModules = [
     SidebarModule,
@@ -21,6 +22,7 @@ const primeNgModules = [
     ChartModule,
     InputGroupModule,
     InputGroupAddonModule,
+    TabViewModule,
 ];
 
 @NgModule({
