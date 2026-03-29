@@ -16,6 +16,12 @@ export class PoolComponent implements OnInit {
 
   @Input() uri = '';
 
+  tlsModes = [
+    { label: 'Disabled', value: 0 },
+    { label: 'Enabled (Bundled CA)', value: 1 },
+    { label: 'Enabled (Custom CA)', value: 2 }
+  ];
+
   constructor(
     private fb: FormBuilder,
     private systemService: SystemService,
@@ -53,7 +59,11 @@ export class PoolComponent implements OnInit {
           stratumUser: [info.stratumUser, [Validators.required]],
           stratumPassword: ['*****', [Validators.required]],
           fallbackStratumUser: [info.fallbackStratumUser, [Validators.required]],
-          fallbackStratumPassword: ['password', [Validators.required]]
+          fallbackStratumPassword: ['password', [Validators.required]],
+          stratumTLS: [info.stratumTLS ?? 0],
+          stratumCert: [info.stratumCert ?? 'x'],
+          fallbackStratumTLS: [info.fallbackStratumTLS ?? 0],
+          fallbackStratumCert: [info.fallbackStratumCert ?? 'x']
         });
       });
   }
