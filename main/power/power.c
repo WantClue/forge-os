@@ -90,6 +90,28 @@ int Power_get_nominal_voltage(GlobalState * GLOBAL_STATE) {
     }
 }
 
+float Power_get_vr_voltage(GlobalState * GLOBAL_STATE) {
+
+    switch (GLOBAL_STATE->device_model) {
+        case BITFORGE_NANO:
+            return TPS546_get_vout();
+        default:
+    }
+
+    return 0.0;
+}
+
+float Power_get_vr_current(GlobalState * GLOBAL_STATE) {
+
+    switch (GLOBAL_STATE->device_model) {
+        case BITFORGE_NANO:
+            return TPS546_get_iout();
+        default:
+    }
+
+    return 0.0;
+}
+
 float Power_get_vreg_temp(GlobalState * GLOBAL_STATE) {
 
     switch (GLOBAL_STATE->device_model) {
