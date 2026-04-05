@@ -18,8 +18,8 @@ export class PoolComponent implements OnInit {
 
   tlsModes = [
     { label: 'Disabled', value: 0 },
-    { label: 'Enabled (Bundled CA)', value: 1 },
-    { label: 'Enabled (Custom CA)', value: 2 }
+    { label: 'Enabled (Bundled CA)', value: 1 }
+    //{ label: 'Enabled (Custom CA)', value: 2 }
   ];
 
   constructor(
