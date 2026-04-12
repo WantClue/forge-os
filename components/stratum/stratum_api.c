@@ -141,6 +141,7 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
     char *line = NULL;
     char recv_buffer[BUFFER_SIZE];
     int nbytes;
+    int timeout_count = 0;
 
     while (!strstr(json_rpc_buffer, "\n")) {
         memset(recv_buffer, 0, BUFFER_SIZE);
@@ -168,10 +169,17 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
             }
             return NULL;
         }
-        if (nbytes > 0) {
-            realloc_json_buffer(nbytes);
-            strncat(json_rpc_buffer, recv_buffer, nbytes);
+        if (nbytes == 0) {
+            timeout_count++;
+            if (timeout_count >= 10) {
+                ESP_LOGW(TAG, "Transport read timed out %d times, giving up", timeout_count);
+                return NULL;
+            }
+            continue;
         }
+        timeout_count = 0;
+        realloc_json_buffer(nbytes);
+        strncat(json_rpc_buffer, recv_buffer, nbytes);
     }
 
     // Extract the line
@@ -370,7 +378,18 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         }
         new_work->merkle_branches = malloc(HASH_SIZE * new_work->n_merkle_branches);
         for (size_t i = 0; i < new_work->n_merkle_branches; i++) {
-            hex2bin(cJSON_GetArrayItem(merkle_branch, i)->valuestring, new_work->merkle_branches + HASH_SIZE * i, HASH_SIZE);
+            cJSON * branch = cJSON_GetArrayItem(merkle_branch, i);
+            if (!branch || !cJSON_IsString(branch)) {
+                ESP_LOGE(TAG, "Invalid merkle branch element at index %d", (int)i);
+                free(new_work->merkle_branches);
+                free(new_work->job_id);
+                free(new_work->prev_block_hash);
+                free(new_work->coinbase_1);
+                free(new_work->coinbase_2);
+                free(new_work);
+                goto done;
+            }
+            hex2bin(branch->valuestring, new_work->merkle_branches + HASH_SIZE * i, HASH_SIZE);
         }
 
         new_work->version = strtoul(cJSON_GetArrayItem(params, 5)->valuestring, NULL, 16);
@@ -384,16 +403,32 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         message->mining_notification = new_work;
     } else if (message->method == MINING_SET_DIFFICULTY) {
         cJSON * params = cJSON_GetObjectItem(json, "params");
-        uint32_t difficulty = cJSON_GetArrayItem(params, 0)->valueint;
+        cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
+        if (p0 == NULL) {
+            ESP_LOGE(TAG, "Invalid params in mining.set_difficulty");
+            goto done;
+        }
+        uint32_t difficulty = p0->valueint;
         message->new_difficulty = difficulty;
     } else if (message->method == MINING_SET_VERSION_MASK) {
         cJSON * params = cJSON_GetObjectItem(json, "params");
-        uint32_t version_mask = strtoul(cJSON_GetArrayItem(params, 0)->valuestring, NULL, 16);
+        cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
+        if (p0 == NULL || !cJSON_IsString(p0)) {
+            ESP_LOGE(TAG, "Invalid params in mining.set_version_mask");
+            goto done;
+        }
+        uint32_t version_mask = strtoul(p0->valuestring, NULL, 16);
         message->version_mask = version_mask;
     } else if (message->method == MINING_SET_EXTRANONCE) {
         cJSON * params = cJSON_GetObjectItem(json, "params");
-        char * extranonce_str = cJSON_GetArrayItem(params, 0)->valuestring;
-        uint32_t extranonce_2_len = cJSON_GetArrayItem(params, 1)->valueint;
+        cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
+        cJSON * p1 = params ? cJSON_GetArrayItem(params, 1) : NULL;
+        if (p0 == NULL || !cJSON_IsString(p0) || p1 == NULL) {
+            ESP_LOGE(TAG, "Invalid params in mining.set_extranonce");
+            goto done;
+        }
+        char * extranonce_str = p0->valuestring;
+        uint32_t extranonce_2_len = p1->valueint;
         if (extranonce_2_len > MAX_EXTRANONCE_2_LEN) {
             ESP_LOGW(TAG, "Extranonce_2_len %u exceeds maximum %d, clamping to maximum",
                      extranonce_2_len, MAX_EXTRANONCE_2_LEN);
