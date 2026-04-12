@@ -30,23 +30,51 @@
     </div>
     <div class="col-12 lg:col-6 xl:col-4">
       <div class="card">
-          <h2>Update Website <span *ngIf="websiteUpdateProgress != null">{{websiteUpdateProgress}}%</span></h2>
+          <h2>Update Website</h2>
 
           <p-fileUpload #websiteUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaWWWUpdate($event)"
-              [auto]="true" chooseLabel="Browse"></p-fileUpload>
+              [auto]="true" chooseLabel="Browse" [disabled]="isUpdating"></p-fileUpload>
 
           <small>(www.bin)</small>
       </div>
     </div>
     <div class="col-12 lg:col-6 xl:col-4">
         <div class="card">
-            <h2>Update Firmware <span *ngIf="firmwareUpdateProgress != null">{{firmwareUpdateProgress}}%</span></h2>
-            <!-- <input type="file" id="file" (change)="otaUpdate($event)" accept=".bin"> -->
+            <h2>Update Firmware</h2>
             <p-fileUpload #firmwareUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaUpdate($event)"
-                [auto]="true" chooseLabel="Browse"></p-fileUpload>
+                [auto]="true" chooseLabel="Browse" [disabled]="isUpdating"></p-fileUpload>
 
             <small>(bitforgeos.bin)</small>
         </div>
-
     </div>
 </div>
+
+<app-modal #progressModal [headline]="'Updating ' + updateTarget" [closable]="updateStatus !== 'progress'">
+    <div class="flex flex-column align-items-center justify-content-center p-4">
+        <ng-container *ngIf="updateStatus === 'progress'">
+            <div class="text-xl mb-3">
+                Uploading... {{ updateTarget === 'Website' ? websiteUpdateProgress : firmwareUpdateProgress }}%
+            </div>
+            <p-progressBar class="w-full" [showValue]="false" [value]="updateTarget === 'Website' ? websiteUpdateProgress : firmwareUpdateProgress" [style]="{'height': '1.5rem', 'width': '100%'}"></p-progressBar>
+            <div class="text-center mt-3 text-500">
+                Please do not disconnect the power.
+            </div>
+        </ng-container>
+
+        <ng-container *ngIf="updateStatus === 'success'">
+            <i class="pi pi-check-circle text-green-500" style="font-size: 3.5rem; margin-bottom: 1rem;"></i>
+            <div class="text-lg text-center">{{ updateMessage }}</div>
+            <div class="mt-4" *ngIf="updateTarget !== 'Website'">
+                <p-button (onClick)="progressModal.isVisible = false">Close</p-button>
+            </div>
+        </ng-container>
+
+        <ng-container *ngIf="updateStatus === 'error'">
+            <i class="pi pi-times-circle text-red-500" style="font-size: 3.5rem; margin-bottom: 1rem;"></i>
+            <div class="text-lg text-center text-red-500">{{ updateMessage }}</div>
+            <div class="mt-4">
+                <p-button (onClick)="progressModal.isVisible = false">Close</p-button>
+            </div>
+        </ng-container>
+    </div>
+</app-modal>

@@ -8,6 +8,7 @@ import { GithubUpdateService } from 'src/app/services/github-update.service';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
 import { eASICModel } from 'src/models/enum/eASICModel';
+import { ModalComponent } from '../modal/modal.component';
 
 @Component({
   selector: 'app-settings',
@@ -18,9 +19,15 @@ export class SettingsComponent {
 
   public form!: FormGroup;
 
-  public firmwareUpdateProgress: number | null = null;
-  public websiteUpdateProgress: number | null = null;
+  public firmwareUpdateProgress: number = 0;
+  public websiteUpdateProgress: number = 0;
+  public isUpdating: boolean = false;
 
+  public updateTarget: string = '';
+  public updateStatus: 'progress' | 'success' | 'error' = 'progress';
+  public updateMessage: string = '';
+
+  @ViewChild('progressModal') progressModal?: ModalComponent;
 
   public eASICModel = eASICModel;
   public ASICModel!: eASICModel;
@@ -113,80 +120,98 @@ export class SettingsComponent {
   }
 
   otaUpdate(event: FileUploadHandlerEvent) {
+    if (this.isUpdating) return;
+
     const file = event.files[0];
-    this.firmwareUpload.clear(); // clear the file upload component
+    this.firmwareUpload.clear();
 
     if (file.name != 'bitforgeos.bin') {
       this.toastrService.error('Incorrect file, looking for bitforgeos.bin.', 'Error');
       return;
     }
 
+    this.isUpdating = true;
+    this.updateTarget = 'Firmware';
+    this.updateStatus = 'progress';
+    this.updateMessage = '';
+    if (this.progressModal) {
+      this.progressModal.isVisible = true;
+    }
+
     this.systemService.performOTAUpdate(file)
-      .pipe(this.loadingService.lockUIUntilComplete())
       .subscribe({
         next: (event) => {
           if (event.type === HttpEventType.UploadProgress) {
             this.firmwareUpdateProgress = Math.round((event.loaded / (event.total as number)) * 100);
           } else if (event.type === HttpEventType.Response) {
             if (event.ok) {
-              this.toastrService.success('Firmware updated', 'Success!');
-
+              this.updateStatus = 'success';
+              this.updateMessage = 'Firmware updated. Device has been successfully restarted.';
             } else {
-              this.toastrService.error(event.statusText, 'Error');
+              this.updateStatus = 'error';
+              this.updateMessage = event.statusText || 'An unknown error occurred.';
             }
-          }
-          else if (event instanceof HttpErrorResponse)
-          {
-            this.toastrService.error(event.error, 'Error');
           }
         },
         error: (err) => {
-          this.toastrService.error(err.error, 'Error');
+          this.firmwareUpdateProgress = 0;
+          this.isUpdating = false;
+          this.updateStatus = 'error';
+          this.updateMessage = err.error?.message || err.error || err.message || 'Unknown error occurred';
         },
         complete: () => {
-          this.firmwareUpdateProgress = null;
+          this.firmwareUpdateProgress = 0;
+          this.isUpdating = false;
         }
       });
   }
 
   otaWWWUpdate(event: FileUploadHandlerEvent) {
+    if (this.isUpdating) return;
+
     const file = event.files[0];
-    this.websiteUpload.clear(); // clear the file upload component
+    this.websiteUpload.clear();
 
     if (file.name != 'www.bin') {
       this.toastrService.error('Incorrect file, looking for www.bin.', 'Error');
       return;
     }
 
+    this.isUpdating = true;
+    this.updateTarget = 'Website';
+    this.updateStatus = 'progress';
+    this.updateMessage = '';
+    if (this.progressModal) {
+      this.progressModal.isVisible = true;
+    }
+
     this.systemService.performWWWOTAUpdate(file)
-      .pipe(
-        this.loadingService.lockUIUntilComplete(),
-      ).subscribe({
+      .subscribe({
         next: (event) => {
           if (event.type === HttpEventType.UploadProgress) {
             this.websiteUpdateProgress = Math.round((event.loaded / (event.total as number)) * 100);
           } else if (event.type === HttpEventType.Response) {
             if (event.ok) {
-              this.toastrService.success('Website updated', 'Success!');
+              this.updateStatus = 'success';
+              this.updateMessage = 'Website updated. The page will reload in a few seconds.';
               setTimeout(() => {
                 window.location.reload();
               }, 2000);
             } else {
-              this.toastrService.error(event.statusText, 'Error');
+              this.updateStatus = 'error';
+              this.updateMessage = event.statusText || 'An unknown error occurred.';
             }
-          }
-          else if (event instanceof HttpErrorResponse)
-          {
-            const errorMessage = event.error?.message || event.message || 'Unknown error occurred';
-            this.toastrService.error(errorMessage, 'Error');
           }
         },
         error: (err) => {
-          const errorMessage = err.error?.message || err.message || 'Unknown error occurred';
-          this.toastrService.error(errorMessage, 'Error');
+          this.websiteUpdateProgress = 0;
+          this.isUpdating = false;
+          this.updateStatus = 'error';
+          this.updateMessage = err.error?.message || err.error || err.message || 'Unknown error occurred';
         },
         complete: () => {
-          this.websiteUpdateProgress = null;
+          this.websiteUpdateProgress = 0;
+          this.isUpdating = false;
         }
       });
   }
