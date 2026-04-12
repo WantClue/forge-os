@@ -17,9 +17,6 @@ export class EditComponent implements OnInit, OnDestroy {
 
   public form!: FormGroup;
 
-  public firmwareUpdateProgress: number | null = null;
-  public websiteUpdateProgress: number | null = null;
-
   public savedChanges: boolean = false;
   public settingsUnlocked: boolean = false;
   public eASICModel = eASICModel;
