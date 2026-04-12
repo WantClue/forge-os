@@ -173,7 +173,13 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
             timeout_count++;
             if (timeout_count >= 10) {
                 ESP_LOGW(TAG, "Transport read timed out %d times, giving up", timeout_count);
+                free(json_rpc_buffer);
+                json_rpc_buffer = NULL;
+                json_rpc_buffer_size = 0;
                 return NULL;
+            }
+            continue;
+        }
             }
             continue;
         }
