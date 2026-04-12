@@ -151,9 +151,6 @@ export class SettingsComponent {
               this.updateStatus = 'error';
               this.updateMessage = event.statusText || 'An unknown error occurred.';
             }
-          } else if (event instanceof HttpErrorResponse) {
-            this.updateStatus = 'error';
-            this.updateMessage = event.error?.message || event.error || event.message || 'Unknown error occurred';
           }
         },
         error: (err) => {
@@ -204,9 +201,6 @@ export class SettingsComponent {
               this.updateStatus = 'error';
               this.updateMessage = event.statusText || 'An unknown error occurred.';
             }
-          } else if (event instanceof HttpErrorResponse) {
-            this.updateStatus = 'error';
-            this.updateMessage = event.error?.message || event.error || event.message || 'Unknown error occurred';
           }
         },
         error: (err) => {
