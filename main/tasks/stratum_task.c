@@ -122,6 +122,7 @@ void stratum_close_connection(GlobalState * GLOBAL_STATE)
     ESP_LOGE(TAG, "Shutting down socket and restarting...");
     if (GLOBAL_STATE->transport != NULL) {
         esp_transport_close(GLOBAL_STATE->transport);
+        esp_transport_destroy(GLOBAL_STATE->transport);
         GLOBAL_STATE->transport = NULL;
     }
     cleanQueue(GLOBAL_STATE);
@@ -170,6 +171,7 @@ void stratum_primary_heartbeat(void * pvParameters)
         if (err != ESP_OK) {
             ESP_LOGD(TAG, "Heartbeat. Failed connect check: %s:%d (errno %d: %s)", primary_stratum_url, primary_stratum_port, err, strerror(err));
             esp_transport_close(transport);
+            esp_transport_destroy(transport);
             vTaskDelay(60000 / portTICK_PERIOD_MS);
             continue;
         }
@@ -185,6 +187,7 @@ void stratum_primary_heartbeat(void * pvParameters)
         int bytes_received = esp_transport_read(transport, recv_buffer, BUFFER_SIZE - 1, TRANSPORT_TIMEOUT_MS);
 
         esp_transport_close(transport);
+        esp_transport_destroy(transport);
 
         if (bytes_received == -1)  {
             vTaskDelay(60000 / portTICK_PERIOD_MS);
@@ -280,6 +283,7 @@ void stratum_task(void * pvParameters)
             retry_attempts++;
             ESP_LOGE(TAG, "Transport unable to connect to %s:%d (errno %d). Attempt: %d", stratum_url, port, ret, retry_attempts);
             esp_transport_close(GLOBAL_STATE->transport);
+            esp_transport_destroy(GLOBAL_STATE->transport);
             GLOBAL_STATE->transport = NULL;
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             continue;
