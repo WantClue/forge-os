@@ -180,9 +180,6 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
             }
             continue;
         }
-            }
-            continue;
-        }
         timeout_count = 0;
         realloc_json_buffer(nbytes);
         strncat(json_rpc_buffer, recv_buffer, nbytes);
@@ -342,18 +339,21 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * params = cJSON_GetObjectItem(json, "params");
         if (!params || !cJSON_IsArray(params)) {
             ESP_LOGE(TAG, "Invalid params in mining.notify");
+            message->method = STRATUM_UNKNOWN;
             free(new_work);
             goto done;
         }
         int params_count = cJSON_GetArraySize(params);
         if (params_count < 8) {
             ESP_LOGE(TAG, "Not enough params in mining.notify: %d", params_count);
+            message->method = STRATUM_UNKNOWN;
             free(new_work);
             goto done;
         }
         cJSON *job_id_item = cJSON_GetArrayItem(params, 0);
         if (!job_id_item || !cJSON_IsString(job_id_item)) {
             ESP_LOGE(TAG, "Invalid job_id in mining.notify");
+            message->method = STRATUM_UNKNOWN;
             free(new_work);
             goto done;
         }
@@ -365,6 +365,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * merkle_branch = cJSON_GetArrayItem(params, 4);
         if (!merkle_branch || !cJSON_IsArray(merkle_branch)) {
             ESP_LOGE(TAG, "Invalid merkle_branch in mining.notify");
+            message->method = STRATUM_UNKNOWN;
             free(new_work->job_id);
             free(new_work->prev_block_hash);
             free(new_work->coinbase_1);
@@ -375,6 +376,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         new_work->n_merkle_branches = cJSON_GetArraySize(merkle_branch);
         if (new_work->n_merkle_branches > MAX_MERKLE_BRANCHES) {
             ESP_LOGE(TAG, "Too many Merkle branches: %d", new_work->n_merkle_branches);
+            message->method = STRATUM_UNKNOWN;
             free(new_work->job_id);
             free(new_work->prev_block_hash);
             free(new_work->coinbase_1);
@@ -387,6 +389,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             cJSON * branch = cJSON_GetArrayItem(merkle_branch, i);
             if (!branch || !cJSON_IsString(branch)) {
                 ESP_LOGE(TAG, "Invalid merkle branch element at index %d", (int)i);
+                message->method = STRATUM_UNKNOWN;
                 free(new_work->merkle_branches);
                 free(new_work->job_id);
                 free(new_work->prev_block_hash);
@@ -412,6 +415,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
         if (p0 == NULL) {
             ESP_LOGE(TAG, "Invalid params in mining.set_difficulty");
+            message->method = STRATUM_UNKNOWN;
             goto done;
         }
         uint32_t difficulty = p0->valueint;
@@ -421,6 +425,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
         if (p0 == NULL || !cJSON_IsString(p0)) {
             ESP_LOGE(TAG, "Invalid params in mining.set_version_mask");
+            message->method = STRATUM_UNKNOWN;
             goto done;
         }
         uint32_t version_mask = strtoul(p0->valuestring, NULL, 16);
@@ -431,6 +436,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * p1 = params ? cJSON_GetArrayItem(params, 1) : NULL;
         if (p0 == NULL || !cJSON_IsString(p0) || p1 == NULL) {
             ESP_LOGE(TAG, "Invalid params in mining.set_extranonce");
+            message->method = STRATUM_UNKNOWN;
             goto done;
         }
         char * extranonce_str = p0->valuestring;
