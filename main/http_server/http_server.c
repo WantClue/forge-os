@@ -560,6 +560,18 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "fallbackStratumPort")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, item->valueint);
     }
+    if ((item = cJSON_GetObjectItem(root, "stratumTLS")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_STRATUM_TLS, item->valueint);
+    }
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "stratumCert"))) {
+        nvs_config_set_string(NVS_CONFIG_STRATUM_CERT, item->valuestring);
+    }
+    if ((item = cJSON_GetObjectItem(root, "fallbackStratumTLS")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_FALLBACK_STRATUM_TLS, item->valueint);
+    }
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "fallbackStratumCert"))) {
+        nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_CERT, item->valuestring);
+    }
     if (cJSON_IsString(item = cJSON_GetObjectItem(root, "ssid"))) {
         nvs_config_set_string(NVS_CONFIG_WIFI_SSID, item->valuestring);
     }
@@ -712,6 +724,13 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "fallbackStratumPort", nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, CONFIG_FALLBACK_STRATUM_PORT));
     cJSON_AddStringToObject(root, "stratumUser", stratumUser);
     cJSON_AddStringToObject(root, "fallbackStratumUser", fallbackStratumUser);
+    cJSON_AddNumberToObject(root, "stratumTLS", nvs_config_get_u16(NVS_CONFIG_STRATUM_TLS, CONFIG_STRATUM_TLS));
+    cJSON_AddNumberToObject(root, "fallbackStratumTLS", nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_TLS, CONFIG_FALLBACK_STRATUM_TLS));
+
+    char * stratumCert = nvs_config_get_string(NVS_CONFIG_STRATUM_CERT, CONFIG_STRATUM_CERT);
+    char * fallbackStratumCert = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_CERT, CONFIG_FALLBACK_STRATUM_CERT);
+    cJSON_AddStringToObject(root, "stratumCert", stratumCert);
+    cJSON_AddStringToObject(root, "fallbackStratumCert", fallbackStratumCert);
 
     cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
     cJSON_AddStringToObject(root, "idfVersion", esp_get_idf_version());
@@ -740,6 +759,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     free(fallbackStratumURL);
     free(stratumUser);
     free(fallbackStratumUser);
+    free(stratumCert);
+    free(fallbackStratumCert);
     free(board_version);
 
     const char * sys_info = cJSON_Print(root);

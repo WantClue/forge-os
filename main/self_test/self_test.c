@@ -412,7 +412,6 @@ void execute_production_test(void * pvParameters)
     notify_message.job_id = 0;
     notify_message.prev_block_hash = "0c859545a3498373a57452fac22eb7113df2a465000543520000000000000000";
     notify_message.version = 0x20000004;
-    notify_message.version_mask = 0x1fffe000;
     notify_message.target = 0x1705ae3a;
     notify_message.ntime = 0x647025b5;
     notify_message.difficulty = 1000000;

@@ -37,6 +37,22 @@
                                        placeholder="Enter stratum password" />
                             </div>
                         </div>
+                        <div class="field grid p-fluid">
+                            <label htmlFor="stratumTLS" class="col-12 mb-2 md:col-2 md:mb-0">TLS:</label>
+                            <div class="col-12 md:col-10">
+                                <p-dropdown id="stratumTLS" [options]="tlsModes" formControlName="stratumTLS"
+                                            optionLabel="label" optionValue="value" placeholder="Select TLS Mode">
+                                </p-dropdown>
+                            </div>
+                        </div>
+                        <div class="field grid p-fluid" *ngIf="form.get('stratumTLS')?.value === 2">
+                            <label htmlFor="stratumCert" class="col-12 mb-2 md:col-2 md:mb-0">TLS Certificate:</label>
+                            <div class="col-12 md:col-10">
+                                <textarea pInputTextarea id="stratumCert" formControlName="stratumCert" rows="5"
+                                          style="width: 100%; font-family: monospace; font-size: 12px;"
+                                          placeholder="Paste PEM certificate here"></textarea>
+                            </div>
+                        </div>
                     </p-tabPanel>
 
                     <p-tabPanel header="Fallback Pool" leftIcon="pi pi-shield">
@@ -70,6 +86,22 @@
                                 <input pInputText id="fallbackStratumPassword" formControlName="fallbackStratumPassword"
                                        [type]="showFallbackStratumPassword ? 'text' : 'password'"
                                        placeholder="Enter fallback stratum password" />
+                            </div>
+                        </div>
+                        <div class="field grid p-fluid">
+                            <label htmlFor="fallbackStratumTLS" class="col-12 mb-2 md:col-2 md:mb-0">TLS:</label>
+                            <div class="col-12 md:col-10">
+                                <p-dropdown id="fallbackStratumTLS" [options]="tlsModes" formControlName="fallbackStratumTLS"
+                                            optionLabel="label" optionValue="value" placeholder="Select TLS Mode">
+                                </p-dropdown>
+                            </div>
+                        </div>
+                        <div class="field grid p-fluid" *ngIf="form.get('fallbackStratumTLS')?.value === 2">
+                            <label htmlFor="fallbackStratumCert" class="col-12 mb-2 md:col-2 md:mb-0">TLS Certificate:</label>
+                            <div class="col-12 md:col-10">
+                                <textarea pInputTextarea id="fallbackStratumCert" formControlName="fallbackStratumCert" rows="5"
+                                          style="width: 100%; font-family: monospace; font-size: 12px;"
+                                          placeholder="Paste PEM certificate here"></textarea>
                             </div>
                         </div>
                     </p-tabPanel>
