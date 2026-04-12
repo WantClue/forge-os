@@ -33,7 +33,7 @@
           <h2>Update Website</h2>
 
           <p-fileUpload #websiteUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaWWWUpdate($event)"
-              [auto]="true" chooseLabel="Browse"></p-fileUpload>
+              [auto]="true" chooseLabel="Browse" [disabled]="isUpdating"></p-fileUpload>
 
           <small>(www.bin)</small>
       </div>
@@ -42,7 +42,7 @@
         <div class="card">
             <h2>Update Firmware</h2>
             <p-fileUpload #firmwareUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaUpdate($event)"
-                [auto]="true" chooseLabel="Browse"></p-fileUpload>
+                [auto]="true" chooseLabel="Browse" [disabled]="isUpdating"></p-fileUpload>
 
             <small>(bitforgeos.bin)</small>
         </div>

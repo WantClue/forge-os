@@ -21,6 +21,7 @@ export class SettingsComponent {
 
   public firmwareUpdateProgress: number = 0;
   public websiteUpdateProgress: number = 0;
+  public isUpdating: boolean = false;
 
   public updateTarget: string = '';
   public updateStatus: 'progress' | 'success' | 'error' = 'progress';
@@ -119,6 +120,8 @@ export class SettingsComponent {
   }
 
   otaUpdate(event: FileUploadHandlerEvent) {
+    if (this.isUpdating) return;
+
     const file = event.files[0];
     this.firmwareUpload.clear();
 
@@ -127,6 +130,7 @@ export class SettingsComponent {
       return;
     }
 
+    this.isUpdating = true;
     this.updateTarget = 'Firmware';
     this.updateStatus = 'progress';
     this.updateMessage = '';
@@ -153,16 +157,21 @@ export class SettingsComponent {
           }
         },
         error: (err) => {
+          this.firmwareUpdateProgress = 0;
+          this.isUpdating = false;
           this.updateStatus = 'error';
           this.updateMessage = err.error?.message || err.error || err.message || 'Unknown error occurred';
         },
         complete: () => {
           this.firmwareUpdateProgress = 0;
+          this.isUpdating = false;
         }
       });
   }
 
   otaWWWUpdate(event: FileUploadHandlerEvent) {
+    if (this.isUpdating) return;
+
     const file = event.files[0];
     this.websiteUpload.clear();
 
@@ -171,6 +180,7 @@ export class SettingsComponent {
       return;
     }
 
+    this.isUpdating = true;
     this.updateTarget = 'Website';
     this.updateStatus = 'progress';
     this.updateMessage = '';
@@ -200,11 +210,14 @@ export class SettingsComponent {
           }
         },
         error: (err) => {
+          this.websiteUpdateProgress = 0;
+          this.isUpdating = false;
           this.updateStatus = 'error';
           this.updateMessage = err.error?.message || err.error || err.message || 'Unknown error occurred';
         },
         complete: () => {
           this.websiteUpdateProgress = 0;
+          this.isUpdating = false;
         }
       });
   }
