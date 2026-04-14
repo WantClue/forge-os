@@ -4,6 +4,8 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "adc.h"
 #include <math.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 #define ADC_ATTEN_CHANNEL_1  ADC_ATTEN_DB_12
 #define ADC_ATTEN_CHANNEL_3  ADC_ATTEN_DB_12
@@ -31,6 +33,9 @@ static adc_cali_handle_t adc1_cali_chan4_handle;
 static adc_cali_handle_t adc1_cali_chan5_handle;
 static adc_cali_handle_t adc1_cali_chan6_handle;
 static adc_oneshot_unit_handle_t adc1_handle;
+
+// adc_oneshot driver is not thread-safe; this mutex serialises all reads
+static SemaphoreHandle_t adc_mutex = NULL;
 
 
 /*---------------------------------------------------------------
@@ -88,6 +93,8 @@ static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_att
 // Sets up the ADC to read Vcore. Run this before ADC_get_vcore()
 void ADC_init(GlobalState * GLOBAL_STATE)
 {
+    adc_mutex = xSemaphoreCreateMutex();
+
     //-------------ADC1 Init---------------//
     adc_oneshot_unit_init_cfg_t init_config1 = {
         .unit_id = ADC_UNIT_1,
@@ -152,77 +159,69 @@ void ADC_init(GlobalState * GLOBAL_STATE)
 
 }
 
+// Helper: take mutex, read one ADC channel, calibrate, give mutex.
+// Returns 0 and logs on any error; never aborts.
+static uint16_t adc_read_channel_mv(adc_channel_t channel, adc_cali_handle_t cali_handle)
+{
+    if (xSemaphoreTake(adc_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        ESP_LOGW(TAG, "ADC mutex timeout (ch %d)", channel);
+        return 0;
+    }
+    int raw = 0, mv = 0;
+    esp_err_t ret = adc_oneshot_read(adc1_handle, channel, &raw);
+    if (ret == ESP_OK) {
+        ret = adc_cali_raw_to_voltage(cali_handle, raw, &mv);
+    }
+    xSemaphoreGive(adc_mutex);
+
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "ADC read ch %d failed: %s", channel, esp_err_to_name(ret));
+        return 0;
+    }
+    return (uint16_t)mv;
+}
+
 // returns the ADC voltage in mV
 uint16_t ADC_get_vcore(void)
 {
-    int adc_raw[2][10];
-    int voltage[2][10];
-
-    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_1, &adc_raw[0][1]));
-
-    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan1_handle, adc_raw[0][1], &voltage[0][1]));
-
-    return (uint16_t)voltage[0][1];
+    return adc_read_channel_mv(ADC_CHANNEL_1, adc1_cali_chan1_handle);
 }
 
 // returns the ADC of a specified channel
 uint16_t ADC_read(ADC_CHANNEL Channel, GlobalState * GLOBAL_STATE)
 {
-    int adc_raw[2][10];
-    int voltage[2][10];
-
     switch (GLOBAL_STATE->device_model) {
         case BITFORGE_NANO:
-            switch(Channel) {
-                case V_BUCK_OUTPUT:
-                    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_1, &adc_raw[0][1]));
-                    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan1_handle, adc_raw[0][1], &voltage[0][1]));
-                    return (uint16_t)voltage[0][1];
-                case V_TEMP_10K_A2:
-                    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_3, &adc_raw[0][1]));
-                    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan3_handle, adc_raw[0][1], &voltage[0][1]));
-                    return (uint16_t)voltage[0][1];
-                case V_TEMP_10K_A1:
-                    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_4, &adc_raw[0][1]));
-                    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan4_handle, adc_raw[0][1], &voltage[0][1]));
-                    return (uint16_t)voltage[0][1];
-                case V_0V8_REF:
-                    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_5, &adc_raw[0][1]));
-                    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan5_handle, adc_raw[0][1], &voltage[0][1]));
-                    return (uint16_t)voltage[0][1];
-                case V_1V2_REF:
-                    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_6, &adc_raw[0][1]));
-                    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan6_handle, adc_raw[0][1], &voltage[0][1]));
-                    return (uint16_t)voltage[0][1];
-                default:
+            switch (Channel) {
+                case V_BUCK_OUTPUT: return adc_read_channel_mv(ADC_CHANNEL_1, adc1_cali_chan1_handle);
+                case V_TEMP_10K_A2: return adc_read_channel_mv(ADC_CHANNEL_3, adc1_cali_chan3_handle);
+                case V_TEMP_10K_A1: return adc_read_channel_mv(ADC_CHANNEL_4, adc1_cali_chan4_handle);
+                case V_0V8_REF:     return adc_read_channel_mv(ADC_CHANNEL_5, adc1_cali_chan5_handle);
+                case V_1V2_REF:     return adc_read_channel_mv(ADC_CHANNEL_6, adc1_cali_chan6_handle);
+                default: break;
             }
-        default:
+            break;
+        default: break;
     }
-    return 0U;
+    return 0;
 }
 
 float ADC_get_temperature(ADC_CHANNEL Channel, DeviceModel Device) {
-    int adc_raw[2][10];
-    int voltage_raw[2][10];
+    uint16_t mv = 0;
 
     switch (Device) {
         case BITFORGE_NANO:
-            switch(Channel) {
-                case V_TEMP_10K_A2:
-                    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_3, &adc_raw[0][1]));
-                    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan3_handle, adc_raw[0][1], &voltage_raw[0][1]));
-                    break;
-                case V_TEMP_10K_A1:
-                    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_4, &adc_raw[0][1]));
-                    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan4_handle, adc_raw[0][1], &voltage_raw[0][1]));
-                    break;
-                default:
-                }
-        default:
+            switch (Channel) {
+                case V_TEMP_10K_A2: mv = adc_read_channel_mv(ADC_CHANNEL_3, adc1_cali_chan3_handle); break;
+                case V_TEMP_10K_A1: mv = adc_read_channel_mv(ADC_CHANNEL_4, adc1_cali_chan4_handle); break;
+                default: break;
+            }
+            break;
+        default: break;
     }
-   
+
     // Convert millivolts to volts
-    float voltage = voltage_raw[0][1] / 1000.0;
+    float voltage = mv / 1000.0f;
 
     // Ensure the voltage is within a valid range
     if (voltage <= 0) {
