@@ -420,7 +420,7 @@ static esp_err_t rest_api_common_handler(httpd_req_t * req)
 static esp_err_t rest_common_get_handler(httpd_req_t * req)
 {
     char filepath[FILE_PATH_MAX];
-    uint8_t filePathLength = sizeof(filepath);
+    size_t filePathLength = sizeof(filepath);
 
     rest_server_context_t * rest_context = (rest_server_context_t *) req->user_ctx;
     strlcpy(filepath, rest_context->base_path, filePathLength);
@@ -430,7 +430,7 @@ static esp_err_t rest_common_get_handler(httpd_req_t * req)
         strlcat(filepath, req->uri, filePathLength);
     }
     set_content_type_from_file(req, filepath);
-    strcat(filepath, ".gz");
+    strlcat(filepath, ".gz", sizeof(filepath));
     int fd = open(filepath, O_RDONLY, 0);
     if (fd == -1) {
         // Set status
@@ -604,7 +604,7 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     }
 
     cJSON_Delete(root);
-    httpd_resp_send_chunk(req, NULL, 0);
+    httpd_resp_sendstr(req, "{\"success\":true}");
     return ESP_OK;
 }
 
@@ -840,17 +840,32 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
     size_t erase_size = 65536; // 64KB chunks
     for (size_t offset = 0; offset < www_partition->size; offset += erase_size) {
         size_t size_to_erase = MIN(erase_size, www_partition->size - offset);
-        ESP_ERROR_CHECK(esp_partition_erase_range(www_partition, offset, size_to_erase));
+        if (esp_partition_erase_range(www_partition, offset, size_to_erase) != ESP_OK) {
+            GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
+            snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Erase Error");
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Partition erase failed");
+            return ESP_OK;
+        }
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 
     int chunks = 0;
+    int timeout_retries = 0;
     while (remaining > 0) {
         int recv_len = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)));
 
         if (recv_len == HTTPD_SOCK_ERR_TIMEOUT) {
+            if (++timeout_retries > 30) {
+                snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Timeout");
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Upload timed out");
+                GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
+                return ESP_OK;
+            }
             continue;
-        } else if (recv_len <= 0) {
+        }
+        timeout_retries = 0;
+
+        if (recv_len <= 0) {
             snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Protocol Error");
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
             GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
@@ -910,14 +925,33 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     int remaining = req->content_len;
 
     const esp_partition_t * ota_partition = esp_ota_get_next_update_partition(NULL);
-    ESP_ERROR_CHECK(esp_ota_begin(ota_partition, OTA_SIZE_UNKNOWN, &ota_handle));
+    if (ota_partition == NULL) {
+        GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
+        snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "No OTA partition");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No OTA partition found");
+        return ESP_OK;
+    }
+    if (esp_ota_begin(ota_partition, OTA_SIZE_UNKNOWN, &ota_handle) != ESP_OK) {
+        GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
+        snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "OTA Begin Error");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA begin failed");
+        return ESP_OK;
+    }
 
     int chunks = 0;
+    int timeout_retries = 0;
     while (remaining > 0) {
         int recv_len = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)));
 
-        // Timeout Error: Just retry
+        // Timeout Error: Retry up to 30 times before aborting
         if (recv_len == HTTPD_SOCK_ERR_TIMEOUT) {
+            if (++timeout_retries > 30) {
+                esp_ota_abort(ota_handle);
+                GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
+                snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Timeout");
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Upload timed out");
+                return ESP_OK;
+            }
             continue;
 
             // Serious Error: Abort OTA
@@ -928,10 +962,12 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
             GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
             return ESP_OK;
         }
+        timeout_retries = 0;
 
         // Successful Upload: Flash firmware chunk
         if (esp_ota_write(ota_handle, (const void *) buf, recv_len) != ESP_OK) {
             esp_ota_abort(ota_handle);
+            GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
             snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Write Error");
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write Error");
             return ESP_OK;
@@ -969,6 +1005,11 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
 
 int log_to_queue(const char * format, va_list args)
 {
+    // calloc/printf/xQueueSendToBack are not ISR-safe — fall back to vprintf from ISR context
+    if (xPortInIsrContext()) {
+        return vprintf(format, args);
+    }
+
     va_list args_copy;
     va_copy(args_copy, args);
 
@@ -1064,11 +1105,9 @@ esp_err_t http_404_error_handler(httpd_req_t * req, httpd_err_code_t err)
 void websocket_log_handler()
 {
     while (true) {
-        char * message;
+        char * message = NULL;
         if (xQueueReceive(log_queue, &message, (TickType_t) portMAX_DELAY) != pdPASS) {
-            if (message != NULL) {
-                free((void *) message);
-            }
+            // message was never written by xQueueReceive — do not access it
             vTaskDelay(10 / portTICK_PERIOD_MS);
             continue;
         }

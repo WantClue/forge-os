@@ -211,9 +211,11 @@ float ADC_get_temperature(ADC_CHANNEL Channel, DeviceModel Device) {
                 case V_TEMP_10K_A2:
                     ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_3, &adc_raw[0][1]));
                     ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan3_handle, adc_raw[0][1], &voltage_raw[0][1]));
+                    break;
                 case V_TEMP_10K_A1:
                     ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_4, &adc_raw[0][1]));
                     ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan4_handle, adc_raw[0][1], &voltage_raw[0][1]));
+                    break;
                 default:
                 }
         default:

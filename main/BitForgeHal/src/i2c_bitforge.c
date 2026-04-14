@@ -14,8 +14,8 @@
 #define I2C_MASTER_NUM 0            /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_TIMEOUT_MS 1000
 
-//#define I2C_DEFAULT_TIMEOUT ( I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS )
-#define I2C_DEFAULT_TIMEOUT -1  //-1 means wait forever
+
+#define I2C_DEFAULT_TIMEOUT 1000
 
 static i2c_master_bus_handle_t i2c_bus_handle;
 
