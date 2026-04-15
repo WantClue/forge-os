@@ -94,6 +94,10 @@ static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_att
 void ADC_init(GlobalState * GLOBAL_STATE)
 {
     adc_mutex = xSemaphoreCreateMutex();
+    if (adc_mutex == NULL) {
+    ESP_LOGE(TAG, "Failed to create ADC mutex");
+    // Halt or panic — init cannot safely proceed
+    }
 
     //-------------ADC1 Init---------------//
     adc_oneshot_unit_init_cfg_t init_config1 = {
