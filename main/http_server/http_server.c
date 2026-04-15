@@ -604,6 +604,7 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     }
 
     cJSON_Delete(root);
+    httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"success\":true}");
     return ESP_OK;
 }
