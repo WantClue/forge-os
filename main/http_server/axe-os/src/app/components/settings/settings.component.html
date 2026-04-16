@@ -78,7 +78,8 @@
     <div class="flex flex-column align-items-center justify-content-center p-4">
         <ng-container *ngIf="updateStatus === 'progress'">
             <div class="text-xl mb-3">
-                Uploading... {{ updateTarget === 'Website' ? websiteUpdateProgress : firmwareUpdateProgress }}%
+                <ng-container *ngIf="isGithubOTA">{{getStepLabel(githubOTAStep)}}</ng-container>
+                <ng-container *ngIf="!isGithubOTA">Uploading... {{ updateTarget === 'Website' ? websiteUpdateProgress : firmwareUpdateProgress }}%</ng-container>
             </div>
             <p-progressBar class="w-full" [showValue]="false" [value]="updateTarget === 'Website' ? websiteUpdateProgress : firmwareUpdateProgress" [style]="{'height': '1.5rem', 'width': '100%'}"></p-progressBar>
             <div class="text-center mt-3 text-500">

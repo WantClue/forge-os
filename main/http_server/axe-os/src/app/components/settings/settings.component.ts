@@ -268,16 +268,22 @@ export class SettingsComponent implements OnDestroy {
     this.isGithubOTA = true;
     this.githubOTAStep = 'idle';
     this.githubOTAProgress = 0;
+    this.firmwareUpdateProgress = 0;
+    this.updateTarget = 'GitHub Firmware';
+    this.updateStatus = 'progress';
+    this.updateMessage = '';
+    if (this.progressModal) {
+      this.progressModal.isVisible = true;
+    }
 
     this.systemService.startGithubOTA(fwUrl, wwwUrl).subscribe({
       next: () => {
-        this.toastrService.info('Update started', 'GitHub OTA');
         this.startOTAPolling();
       },
       error: (err) => {
         this.isGithubOTA = false;
-        const msg = err.error?.message || err.message || 'Failed to start update';
-        this.toastrService.error(msg, 'Error');
+        this.updateStatus = 'error';
+        this.updateMessage = err.error?.message || err.message || 'Failed to start update';
       }
     });
   }
@@ -290,10 +296,12 @@ export class SettingsComponent implements OnDestroy {
         next: (status) => {
           this.githubOTAStep = status.step;
           this.githubOTAProgress = status.progress;
+          this.firmwareUpdateProgress = status.progress;
 
           if (status.step === 'rebooting') {
             this.stopOTAPolling();
-            this.toastrService.success('Update complete! Device is rebooting...', 'Success');
+            this.updateStatus = 'success';
+            this.updateMessage = 'Update complete! Device is rebooting...';
             this.startRebootCheck();
             return;
           }
@@ -301,7 +309,8 @@ export class SettingsComponent implements OnDestroy {
           if (status.step === 'error') {
             this.stopOTAPolling();
             this.isGithubOTA = false;
-            this.toastrService.error(status.error || 'Update failed', 'Error');
+            this.updateStatus = 'error';
+            this.updateMessage = status.error || 'Update failed';
             return;
           }
 
