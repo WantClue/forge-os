@@ -397,15 +397,6 @@ esp_err_t POST_OTA_github(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Check if already running
-    xSemaphoreTake(ota_state.mutex, portMAX_DELAY);
-    if (ota_state.running) {
-        xSemaphoreGive(ota_state.mutex);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Update already in progress");
-        return ESP_OK;
-    }
-    xSemaphoreGive(ota_state.mutex);
-
     // Read request body
     char buf[1024];
     int total_len = req->content_len;
@@ -457,8 +448,14 @@ esp_err_t POST_OTA_github(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Store URLs
+    // Atomically check running flag and claim the update slot
     xSemaphoreTake(ota_state.mutex, portMAX_DELAY);
+    if (ota_state.running) {
+        xSemaphoreGive(ota_state.mutex);
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Update already in progress");
+        return ESP_OK;
+    }
     strncpy(ota_state.fw_url, fw_url_item->valuestring, MAX_URL_LEN - 1);
     ota_state.fw_url[MAX_URL_LEN - 1] = '\0';
     strncpy(ota_state.www_url, www_url_item->valuestring, MAX_URL_LEN - 1);
