@@ -24,32 +24,29 @@ bool INA260_installed(void)
     return i2c_bitforge_register_read(ina260_dev_handle, INA260_REG_BUSVOLTAGE, data, 2) == ESP_OK;
 }
 
-float INA260_read_current(void)
-{
+float INA260_read_current(void) {
     uint8_t data[2];
-
-    ESP_ERROR_CHECK(i2c_bitforge_register_read(ina260_dev_handle, INA260_REG_CURRENT, data, 2));
-    // ESP_LOGI(TAG, "Raw Current = %02X %02X", data[1], data[0]);
-
-    return (uint16_t)(data[1] | (data[0] << 8)) * 1.25;
+    if (i2c_bitforge_register_read(ina260_dev_handle, INA260_REG_CURRENT, data, 2) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to read current");
+        return 0.0f;
+    }
+    return (uint16_t)(data[1] | (data[0] << 8)) * 1.25f;
 }
 
-float INA260_read_voltage(void)
-{
+float INA260_read_voltage(void) {
     uint8_t data[2];
-
-    ESP_ERROR_CHECK(i2c_bitforge_register_read(ina260_dev_handle, INA260_REG_BUSVOLTAGE, data, 2));
-    // ESP_LOGI(TAG, "Raw Voltage = %02X %02X", data[1], data[0]);
-
-    return (uint16_t)(data[1] | (data[0] << 8)) * 1.25;
+    if (i2c_bitforge_register_read(ina260_dev_handle, INA260_REG_BUSVOLTAGE, data, 2) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to read voltage");
+        return 0.0f;
+    }
+    return (uint16_t)(data[1] | (data[0] << 8)) * 1.25f;
 }
 
-float INA260_read_power(void)
-{
+float INA260_read_power(void) {
     uint8_t data[2];
-
-    ESP_ERROR_CHECK(i2c_bitforge_register_read(ina260_dev_handle, INA260_REG_POWER, data, 2));
-    // ESP_LOGI(TAG, "Raw Power = %02X %02X", data[1], data[0]);
-
-    return (data[1] | (data[0] << 8)) * 10;
+    if (i2c_bitforge_register_read(ina260_dev_handle, INA260_REG_POWER, data, 2) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to read power");
+        return 0.0f;
+    }
+    return (data[1] | (data[0] << 8)) * 10.0f;
 }

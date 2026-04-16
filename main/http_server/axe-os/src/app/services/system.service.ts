@@ -68,7 +68,11 @@ export class SystemService {
 
           chiptemp1: 30,
           chiptemp2: 40,
-          overheat_mode: 0
+          overheat_mode: 0,
+          stratumTLS: 0,
+          fallbackStratumTLS: 0,
+          stratumCert: 'x',
+          fallbackStratumCert: 'x'
         }
       ).pipe(delay(1000));
     }

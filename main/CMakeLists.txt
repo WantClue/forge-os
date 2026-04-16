@@ -60,6 +60,7 @@ PRIV_REQUIRES
     "vfs"
     "esp_driver_i2c"
     "mbedtls"
+    "tcp_transport"
 
 EMBED_FILES
     "http_server/recovery_page.html"

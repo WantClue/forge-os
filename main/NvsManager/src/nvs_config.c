@@ -25,8 +25,12 @@ char * nvs_config_get_string(const char * key, const char * default_value)
     }
 
     char * out = malloc(size);
-    err = nvs_get_str(handle, key, out, &size);
+    if (out == NULL) {
+        nvs_close(handle);
+        return strdup(default_value);
+    }
 
+    err = nvs_get_str(handle, key, out, &size);
     if (err != ESP_OK) {
         free(out);
         nvs_close(handle);
