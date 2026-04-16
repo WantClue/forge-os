@@ -47,6 +47,12 @@ static struct {
     TaskHandle_t task_handle;
 } ota_state = {0};
 
+void ota_github_init(void)
+{
+    ota_state.mutex = xSemaphoreCreateMutex();
+    assert(ota_state.mutex != NULL);
+}
+
 static const char *step_to_string(ota_step_t step)
 {
     switch (step) {
@@ -391,11 +397,6 @@ esp_err_t POST_OTA_github(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Initialize mutex on first call
-    if (ota_state.mutex == NULL) {
-        ota_state.mutex = xSemaphoreCreateMutex();
-    }
-
     // Check if already running
     xSemaphoreTake(ota_state.mutex, portMAX_DELAY);
     if (ota_state.running) {
@@ -500,11 +501,6 @@ esp_err_t GET_OTA_github_status(httpd_req_t *req)
 
     // Prevent caching
     httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-
-    // Initialize mutex on first call
-    if (ota_state.mutex == NULL) {
-        ota_state.mutex = xSemaphoreCreateMutex();
-    }
 
     xSemaphoreTake(ota_state.mutex, portMAX_DELAY);
     ota_step_t step = ota_state.step;

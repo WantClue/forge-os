@@ -1219,6 +1219,9 @@ esp_err_t start_rest_server(void * pvParameters)
         .uri = "/api/system/OTAWWW", .method = HTTP_POST, .handler = POST_WWW_update, .user_ctx = NULL};
     httpd_register_uri_handler(server, &update_post_ota_www);
 
+    /* Initialize GitHub OTA module (creates mutex) */
+    ota_github_init();
+
     /* URI handlers for GitHub OTA update */
     httpd_uri_t ota_github_post_uri = {
         .uri = "/api/system/OTA/github", .method = HTTP_POST, .handler = POST_OTA_github, .user_ctx = NULL};
