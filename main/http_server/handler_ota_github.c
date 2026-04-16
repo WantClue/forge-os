@@ -440,9 +440,9 @@ esp_err_t POST_OTA_github(httpd_req_t *req)
         return ESP_OK;
     }
 
-    // Validate URLs - must start with our GitHub repo
-    if (strncmp(fw_url_item->valuestring, GITHUB_URL_PREFIX, strlen(GITHUB_URL_PREFIX)) != 0 ||
-        strncmp(www_url_item->valuestring, GITHUB_URL_PREFIX, strlen(GITHUB_URL_PREFIX)) != 0) {
+    // Validate URLs - must start with our GitHub repo (case-insensitive: GitHub normalises owner casing)
+    if (strncasecmp(fw_url_item->valuestring, GITHUB_URL_PREFIX, strlen(GITHUB_URL_PREFIX)) != 0 ||
+        strncasecmp(www_url_item->valuestring, GITHUB_URL_PREFIX, strlen(GITHUB_URL_PREFIX)) != 0) {
         cJSON_Delete(root);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid URL: must be from wantclue/forge-os");
         return ESP_OK;

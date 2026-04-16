@@ -59,7 +59,7 @@ PRIV_REQUIRES
     "spiffs"
     "vfs"
     "esp_driver_i2c"
-    "mbedtls"
+    "esp-tls"
     "tcp_transport"
 
 EMBED_FILES
