@@ -4,11 +4,19 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 
-interface GithubRelease {
+export interface GithubAsset {
+  name: string;
+  browser_download_url: string;
+  size: number;
+}
+
+export interface GithubRelease {
   id: number;
   tag_name: string;
   name: string;
   prerelease: boolean;
+  body: string;
+  assets: GithubAsset[];
 }
 
 @Injectable({
@@ -29,4 +37,8 @@ export class GithubUpdateService {
     );
   }
 
+  public findAssetUrl(release: GithubRelease, filename: string): string | null {
+    const asset = release.assets.find(a => a.name === filename);
+    return asset ? asset.browser_download_url : null;
+  }
 }

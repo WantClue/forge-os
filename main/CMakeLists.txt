@@ -11,6 +11,7 @@ SRCS
     "lv_font_portfolio-6x8.c"
     "logo.c"
     "./http_server/http_server.c"
+    "./http_server/handler_ota_github.c"
     "./self_test/self_test.c"
     "./tasks/stratum_task.c"
     "./tasks/create_jobs_task.c"
@@ -47,6 +48,7 @@ PRIV_REQUIRES
     "esp_adc"
     "esp_app_format"
     "esp_event"
+    "esp_http_client"
     "esp_http_server"
     "esp_netif"
     "esp_psram"
@@ -57,6 +59,7 @@ PRIV_REQUIRES
     "spiffs"
     "vfs"
     "esp_driver_i2c"
+    "esp-tls"
     "tcp_transport"
 
 EMBED_FILES
