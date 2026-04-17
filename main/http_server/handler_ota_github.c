@@ -343,14 +343,6 @@ static void ota_github_task(void *pvParameters)
         return;
     }
 
-    err = esp_ota_set_boot_partition(ota_partition);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(err));
-        set_error("Set boot partition failed");
-        vTaskDelete(NULL);
-        return;
-    }
-
     ESP_LOGI(TAG, "Firmware flashed successfully");
     set_progress(50);
 
@@ -436,6 +428,15 @@ static void ota_github_task(void *pvParameters)
 
     free(www_buf);
     ESP_LOGI(TAG, "WWW flashed successfully");
+
+    err = esp_ota_set_boot_partition(ota_partition);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(err));
+        set_error("Set boot partition failed");
+        vTaskDelete(NULL);
+        return;
+    }
+
     set_progress(100);
 
     // ---- Step 4: Reboot ----
