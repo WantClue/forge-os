@@ -24,6 +24,44 @@ static const char *TAG = "ota_github";
 #define MAX_URL_LEN 512
 #define MAX_REDIRECT 8
 
+static bool is_allowed_github_url(const char *url)
+{
+    if (url == NULL) {
+        return false;
+    }
+    if (strncasecmp(url, GITHUB_URL_PREFIX, strlen(GITHUB_URL_PREFIX)) != 0) {
+        return false;
+    }
+    if (strstr(url, "..") != NULL) {
+        return false;
+    }
+    return true;
+}
+
+
+static const char *REDIRECT_ALLOWED_PREFIXES[] = {
+    GITHUB_URL_PREFIX,
+    "https://objects.githubusercontent.com/",
+    "https://release-assets.githubusercontent.com/",
+};
+
+static bool is_allowed_redirect_url(const char *url)
+{
+    if (url == NULL) {
+        return false;
+    }
+    if (strstr(url, "..") != NULL) {
+        return false;
+    }
+    for (size_t i = 0; i < sizeof(REDIRECT_ALLOWED_PREFIXES) / sizeof(REDIRECT_ALLOWED_PREFIXES[0]); i++) {
+        const char *prefix = REDIRECT_ALLOWED_PREFIXES[i];
+        if (strncasecmp(url, prefix, strlen(prefix)) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // OTA update steps
 typedef enum {
     OTA_STEP_IDLE = 0,
@@ -109,12 +147,30 @@ typedef struct {
     int total_expected;
     int total_downloaded;
     void (*progress_cb)(int downloaded, int total);
+
+    // Captured Location header for redirect validation
+    char location[MAX_URL_LEN];
+    bool has_location;
 } download_ctx_t;
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
     download_ctx_t *ctx = (download_ctx_t *)evt->user_data;
-    if (evt->event_id == HTTP_EVENT_ON_DATA && ctx != NULL) {
+    if (ctx == NULL) {
+        return ESP_OK;
+    }
+    if (evt->event_id == HTTP_EVENT_ON_HEADER) {
+        if (evt->header_key && evt->header_value &&
+            strcasecmp(evt->header_key, "Location") == 0) {
+            strncpy(ctx->location, evt->header_value, MAX_URL_LEN - 1);
+            ctx->location[MAX_URL_LEN - 1] = '\0';
+            ctx->has_location = true;
+        }
+    }
+    if (evt->event_id == HTTP_EVENT_ON_DATA) {
+        if (esp_http_client_get_status_code(evt->client) != 200) {
+            return ESP_OK;
+        }
         if (ctx->use_ota_write) {
             if (esp_ota_write(ctx->ota_handle, evt->data, evt->data_len) != ESP_OK) {
                 ESP_LOGE(TAG, "OTA write failed");
@@ -140,6 +196,11 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 
 static int download_from_github(const char *url, download_ctx_t *ctx)
 {
+    if (!is_allowed_github_url(url)) {
+        ESP_LOGE(TAG, "URL failed allowlist validation");
+        return -1;
+    }
+
     esp_http_client_config_t config = {
         .url = url,
         .event_handler = http_event_handler,
@@ -148,6 +209,7 @@ static int download_from_github(const char *url, download_ctx_t *ctx)
         .timeout_ms = 30000,
         .buffer_size = OTA_BUF_SIZE,
         .buffer_size_tx = OTA_BUF_SIZE,
+        .disable_auto_redirect = true,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -156,16 +218,14 @@ static int download_from_github(const char *url, download_ctx_t *ctx)
         return -1;
     }
 
-    // Disable auto-redirect so we can follow manually and validate URLs
-    esp_http_client_set_redirection(client);
-
     esp_err_t err;
     int status_code;
-    int content_length = -1;
     int redirects = 0;
 
     while (redirects < MAX_REDIRECT) {
         ctx->bytes_written = 0;
+        ctx->has_location = false;
+        ctx->location[0] = '\0';
 
         err = esp_http_client_perform(client);
         if (err != ESP_OK) {
@@ -174,7 +234,6 @@ static int download_from_github(const char *url, download_ctx_t *ctx)
         }
 
         status_code = esp_http_client_get_status_code(client);
-        content_length = esp_http_client_get_content_length(client);
 
         if (status_code == 200) {
             ESP_LOGI(TAG, "Download complete, %d bytes", ctx->bytes_written);
@@ -183,15 +242,21 @@ static int download_from_github(const char *url, download_ctx_t *ctx)
         }
 
         if (status_code == 301 || status_code == 302 || status_code == 307 || status_code == 308) {
-            // esp_http_client stores redirect location internally
-            // Just set redirect and retry
+            if (!ctx->has_location) {
+                ESP_LOGE(TAG, "Redirect response missing Location header");
+                break;
+            }
+            if (!is_allowed_redirect_url(ctx->location)) {
+                ESP_LOGE(TAG, "Redirect target rejected by allowlist");
+                break;
+            }
             err = esp_http_client_set_redirection(client);
             if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to set redirect");
+                ESP_LOGE(TAG, "Failed to set redirect: %s", esp_err_to_name(err));
                 break;
             }
             redirects++;
-            ESP_LOGI(TAG, "Following redirect #%d", redirects);
+            ESP_LOGI(TAG, "Following validated redirect #%d", redirects);
             continue;
         }
 
