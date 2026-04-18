@@ -36,6 +36,17 @@ int _largest_power_of_two(int num)
     return 1 << power;
 }
 
+int _next_power_of_two(int num)
+{
+    if (num <= 1) return 1;
+
+    int power = 1;
+    while (power < num) {
+        power <<= 1;
+    }
+    return power;
+}
+
 int count_asic_chips(uint16_t asic_count, uint16_t chip_id, int chip_id_response_length)
 {
     uint8_t buffer[11] = {0};
@@ -118,11 +129,34 @@ esp_err_t receive_work(uint8_t * buffer, int buffer_size)
     }
 
     if (crc5(buffer + 2, buffer_size - 2) != 0) {
-        ESP_LOGE(TAG, "Checksum failed on response");        
+        ESP_LOGE(TAG, "Checksum failed on response");
         ESP_LOG_BUFFER_HEX(TAG, buffer, received);
         SERIAL_clear_buffer();
         return ESP_FAIL;
     }
 
     return ESP_OK;
+}
+
+double calculate_bm_timeout_ms(float frequency_mhz, size_t asic_count,
+                               size_t small_cores, size_t cores,
+                               size_t version_size, float timeout_percent,
+                               double default_time_ms)
+{
+    if (asic_count <= 0) return default_time_ms;
+
+    int cores_up       = _next_power_of_two((int)cores);
+    int small_cores_up = _next_power_of_two((int)small_cores);
+    int asic_count_up  = _next_power_of_two((int)asic_count);
+
+    if ((small_cores_up < cores_up) || (frequency_mhz <= 0.0f))
+        return default_time_ms;
+
+    double midstates       = (double)small_cores_up / (double)cores_up;
+    double serial_versions = (double)version_size   / midstates;
+    double serial_nonces   = NONCE_SPACE / (double)cores_up / (double)asic_count_up;
+    double fullspace_ms    = serial_versions * serial_nonces / ((double)frequency_mhz * 1000.0);
+
+    if (!(fullspace_ms > 0.0)) return default_time_ms;
+    return (double)timeout_percent * fullspace_ms;
 }

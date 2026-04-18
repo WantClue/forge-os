@@ -9,6 +9,9 @@
 
 #define BM1370_ASIC_DIFFICULTY 256
 
+#define BM1370_VERSION_ROLL_SIZE 65536  // 2^16 (BIP320 version-rolling space)
+#define BM1370_TIMEOUT_PERCENT   0.5f   // ~70s interval @ 490MHz, under stratum ~100s cap
+
 #define BM1370_SERIALTX_DEBUG false
 #define BM1370_SERIALRX_DEBUG false
 #define BM1370_DEBUG_WORK false //causes insane amount of debug output
@@ -38,6 +41,9 @@ uint8_t BM1370_init(uint64_t frequency, uint16_t asic_count);
 void BM1370_send_work(void * GLOBAL_STATE, bm_job * next_bm_job);
 void BM1370_set_job_difficulty_mask(int);
 void BM1370_set_version_mask(uint32_t version_mask);
+void BM1370_set_hash_counting_number(uint32_t hcn);
+void BM1370_set_nonce_space(double nonce_percent, float frequency,
+                            uint16_t asic_count, uint16_t cores);
 int BM1370_set_max_baud(void);
 int BM1370_set_default_baud(void);
 void BM1370_send_hash_frequency(float frequency);

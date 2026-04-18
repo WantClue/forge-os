@@ -94,6 +94,11 @@ static const register_type_t REGISTER_MAP[] = {
 
 static const char * TAG = "bm1370Module";
 
+// Initialized by _send_init() to 256 / chip_counter so chip addresses
+// split the address space evenly (required for correct per-chip nonce
+// partitioning via the HCN register).
+static uint8_t address_interval = 4;
+
 static task_result result;
 
 /// @brief
@@ -172,13 +177,46 @@ static void _set_chip_address(uint8_t chipAddr)
     _send_BM1370((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, BM1370_SERIALTX_DEBUG);
 }
 
-void BM1370_set_version_mask(uint32_t version_mask) 
+void BM1370_set_version_mask(uint32_t version_mask)
 {
     int versions_to_roll = version_mask >> 13;
     uint8_t version_byte0 = (versions_to_roll >> 8);
-    uint8_t version_byte1 = (versions_to_roll & 0xFF); 
+    uint8_t version_byte1 = (versions_to_roll & 0xFF);
     uint8_t version_cmd[] = {0x00, 0xA4, 0x90, 0x00, version_byte0, version_byte1};
     _send_BM1370(TYPE_CMD | GROUP_ALL | CMD_WRITE, version_cmd, 6, BM1370_SERIALTX_DEBUG);
+}
+
+void BM1370_set_hash_counting_number(uint32_t hcn)
+{
+    uint8_t set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x00, 0x00};
+    set_10_hash_counting[2] = (hcn >> 24) & 0xFF;
+    set_10_hash_counting[3] = (hcn >> 16) & 0xFF;
+    set_10_hash_counting[4] = (hcn >> 8)  & 0xFF;
+    set_10_hash_counting[5] =  hcn        & 0xFF;
+    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE),
+                 set_10_hash_counting, 6, BM1370_SERIALTX_DEBUG);
+}
+
+void BM1370_set_nonce_space(double nonce_percent, float frequency,
+                            uint16_t asic_count, uint16_t cores)
+{
+    int cores_up      = _next_power_of_two(cores);
+    int asic_count_up = _next_power_of_two(asic_count);
+
+    // HCN (hash counting number) bounds the nonce range each chip scans
+    // before it starts over, so sizing it to NONCE_SPACE / cores / asics
+    // prevents the chips from overlapping each other's ranges.
+    float  hcn_space = (float)NONCE_SPACE / cores_up / asic_count_up;
+    double hcn_max   = hcn_space * (double)FREQ_MULT / frequency * 0.5f;
+    // BM1370 HW errata: up to 2 * 134 hashes/cycle can duplicate
+    int    hcn_error = 2 * 134;
+    double hcn_frac  = nonce_percent * (hcn_max - hcn_error);
+    uint32_t hcn_register_value = (uint32_t)hcn_frac;
+
+    ESP_LOGI(TAG, "HCN=0x%08lx (cores_up=%d, asics_up=%d, freq=%.2fMHz)",
+             (unsigned long)hcn_register_value, cores_up, asic_count_up, frequency);
+
+    BM1370_set_hash_counting_number(hcn_register_value);
 }
 
 void BM1370_send_hash_frequency(float target_freq) {
@@ -287,8 +325,11 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     // unsigned char init7[7] = {0x55, 0xAA, 0x53, 0x05, 0x00, 0x00, 0x03};
     // _send_simple(init7, 7);
 
-    // BM1370 uses address interval of 4 
-    uint8_t address_interval = 4;
+    // Split the 8-bit chip address space evenly across the detected chips.
+    // Required for per-chip nonce partitioning: the chip address embedded in
+    // a nonce response must be decodable back to a chip index via the same
+    // interval (see BM1370_process_work).
+    address_interval = 256 / chip_counter;
     for (uint8_t i = 0; i < chip_counter; i++) {
         _set_chip_address(i * address_interval);
         // unsigned char init8[7] = {0x55, 0xAA, 0x40, 0x05, 0x00, 0x00, 0x1C};
@@ -349,15 +390,11 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     //ramp up the hash frequency
     do_frequency_ramp_up(frequency);
 
-    //register 10 is still a bit of a mystery. discussion: https://github.com/bitaxeorg/ESP-Miner/pull/167
-
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x11, 0x5A}; //S19k Pro Default
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x14, 0x46}; //S19XP-Luxos Default
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x15, 0x1C}; //S19XP-Stock Default
-    //unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x15, 0xA4}; //S21-Stock Default
-    unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x1E, 0xB5}; //S21 Pro-Stock Default
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x0F, 0x00, 0x00}; //supposedly the "full" 32bit nonce range
-    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), set_10_hash_counting, 6, BM1370_SERIALTX_DEBUG);
+    // Program HCN (register 0x10) from the running configuration so each
+    // chip scans a disjoint slice of the 2^32 nonce space. Replaces the
+    // hardcoded S21 Pro stock value that caused both chips to overlap.
+    // Background: https://github.com/bitaxeorg/ESP-Miner/pull/420
+    BM1370_set_nonce_space(1.0, (float)frequency, asic_count, (uint16_t)BM1370_CORE_COUNT);
 
     return chip_counter;
 }
@@ -508,8 +545,8 @@ task_result * BM1370_process_work(void * pvParameters)
             ESP_LOGW(TAG, "Unknown register read: %02x", asic_result.cmd.register_address);
             return NULL;
         }
-        // Convert chip address to chip index
-        result.asic_nr = asic_result.cmd.asic_address / 4;
+        // Convert chip address to chip index using the same interval used at init.
+        result.asic_nr = asic_result.cmd.asic_address / address_interval;
         result.value = ntohl(asic_result.cmd.value);
 
         return &result;
@@ -543,10 +580,8 @@ void BM1370_read_registers(void)
     int size = sizeof(REGISTER_MAP) / sizeof(REGISTER_MAP[0]);
     int asic_count = BITFORGE_NANO_ASIC_COUNT;
 
-    // BM1370 uses address interval of 4 (chips addressed as 0, 4, 8, 12...)
-    uint8_t address_interval = 4;
-
-    // Read registers from each ASIC chip using correct chip addresses
+    // address_interval is file-scope, initialized during _send_init() to
+    // 256 / chip_counter (e.g. 128 for 2 chips, so addresses are 0x00/0x80).
     for (int i = 0; i < asic_count; i++) {
         uint8_t chip_addr = i * address_interval;
         for (int reg = 0; reg < size; reg++) {
