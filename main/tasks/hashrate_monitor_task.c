@@ -159,7 +159,7 @@ void hashrate_monitor_task(void *pvParameters)
     TickType_t taskWakeTime = xTaskGetTickCount();
     while (1) {
         BM1370_read_registers();
-        ESP_LOGI(TAG, "Sent register read commands");
+        ESP_LOGD(TAG, "Sent register read commands");
 
         vTaskDelay(100 / portTICK_PERIOD_MS);
 
