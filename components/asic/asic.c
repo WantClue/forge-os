@@ -3,6 +3,8 @@
 #include <esp_log.h>
 
 #include "bm1370.h"
+#include "common.h"
+#include "global_state.h"
 
 #include "asic.h"
 
@@ -119,11 +121,20 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
 
     if (strcmp(GLOBAL_STATE->device_model_str, "BITFORGE_NANO") == 0) {
         GLOBAL_STATE->asic_model = ASIC_BM1370;
-        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1370_CORE_COUNT * 1000)) / (double) BITAXE_GAMMA_ASIC_COUNT; // version-rolling so Small Cores have different Nonce Space
-        GLOBAL_STATE->asic_job_frequency_ms = 500; //ms
+        float frequency_mhz = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value;
+        GLOBAL_STATE->asic_job_frequency_ms = calculate_bm_timeout_ms(
+            frequency_mhz,
+            BITFORGE_NANO_ASIC_COUNT,
+            BM1370_SMALL_CORE_COUNT,
+            BM1370_CORE_COUNT,
+            BM1370_VERSION_ROLL_SIZE,
+            BM1370_TIMEOUT_PERCENT,
+            ASIC_BM1370_JOB_FREQUENCY_MS);
         GLOBAL_STATE->ASIC_difficulty = BM1370_ASIC_DIFFICULTY;
         ESP_LOGI(TAG, "DEVICE: BitForgeNano");
         ESP_LOGI(TAG, "ASIC: %dx BM1370 (%" PRIu64 " cores)", BITFORGE_NANO_ASIC_COUNT, BM1370_CORE_COUNT);
+        ESP_LOGI(TAG, "Computed ASIC job interval: %.1f ms (freq=%.2f MHz, timeout_percent=%.2f)",
+                 GLOBAL_STATE->asic_job_frequency_ms, frequency_mhz, BM1370_TIMEOUT_PERCENT);
         GLOBAL_STATE->device_model = BITFORGE_NANO;
 
     } else {
