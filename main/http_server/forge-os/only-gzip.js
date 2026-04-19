@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const directory = './dist/axe-os';
+const directory = './dist/forge-os';
 
 fs.readdir(directory, (err, files) => {
     if (err) throw err;
