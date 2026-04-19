@@ -346,6 +346,7 @@ void stratum_task(void * pvParameters)
                 }
                 stratum_api_v1_message.mining_notification->difficulty = SYSTEM_TASK_MODULE.stratum_difficulty;
                 queue_enqueue(&GLOBAL_STATE->stratum_queue, stratum_api_v1_message.mining_notification);
+                stratum_api_v1_message.mining_notification = NULL;
             } else if (stratum_api_v1_message.method == MINING_SET_DIFFICULTY) {
                 if (stratum_api_v1_message.new_difficulty != SYSTEM_TASK_MODULE.stratum_difficulty) {
                     SYSTEM_TASK_MODULE.stratum_difficulty = stratum_api_v1_message.new_difficulty;
@@ -361,6 +362,7 @@ void stratum_task(void * pvParameters)
                 char *old_extranonce = GLOBAL_STATE->extranonce_str;
                 GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
                 GLOBAL_STATE->extranonce_2_len = stratum_api_v1_message.extranonce_2_len;
+                stratum_api_v1_message.extranonce_str = NULL;
                 free(old_extranonce);
             } else if (stratum_api_v1_message.method == MINING_PING) {
                 STRATUM_V1_pong(GLOBAL_STATE->transport, stratum_api_v1_message.message_id);
