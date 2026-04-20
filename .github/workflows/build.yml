@@ -13,7 +13,7 @@ jobs:
       with:
         node-version: '22.12.0'
     - name: Build web dist
-      working-directory: ./main/http_server/axe-os
+      working-directory: ./main/http_server/forge-os
       run: |
         npm ci
         npm run build

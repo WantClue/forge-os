@@ -70,12 +70,12 @@ EMBED_FILES
 idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_INCLUDE_SIMPLE=1" APPEND)
 idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_PATH=\"${CMAKE_SOURCE_DIR}/main/lv_conf.h\"" APPEND)
 
-set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/http_server/axe-os")
+set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/http_server/forge-os")
 
 if("$ENV{GITHUB_ACTIONS}" STREQUAL "true")
     message(STATUS "Running on GitHub Actions. Web ui will be prebuilt.")
 
-    spiffs_create_partition_image(www ${WEB_SRC_DIR}/dist/axe-os FLASH_IN_PROJECT)
+    spiffs_create_partition_image(www ${WEB_SRC_DIR}/dist/forge-os FLASH_IN_PROJECT)
 else()
     find_program(NPM_EXECUTABLE npm)
     if(NOT NPM_EXECUTABLE AND NOT EXISTS ${WEB_SRC_DIR}/dist)
@@ -96,10 +96,10 @@ else()
         BUILD_ALWAYS OFF
         BUILD_IN_SOURCE TRUE
         BUILD_BYPRODUCTS
-            "${WEB_SRC_DIR}/dist/axe-os/index.html"
+            "${WEB_SRC_DIR}/dist/forge-os/index.html"
     )
 
     add_dependencies(${COMPONENT_LIB} web_ui_dist)
 
-    spiffs_create_partition_image(www ${WEB_SRC_DIR}/dist/axe-os FLASH_IN_PROJECT DEPENDS web_ui_dist)
+    spiffs_create_partition_image(www ${WEB_SRC_DIR}/dist/forge-os FLASH_IN_PROJECT DEPENDS web_ui_dist)
 endif()
