@@ -3,7 +3,7 @@
 
 typedef struct
 {
-    uint32_t stratum_difficulty;
+    double stratum_difficulty;
 } SystemTaskModule;
 
 void stratum_task(void *pvParameters);
