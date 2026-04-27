@@ -20,7 +20,7 @@ typedef struct
     uint8_t midstate1[32];
     uint8_t midstate2[32];
     uint8_t midstate3[32];
-    uint32_t pool_diff;
+    double pool_diff;
     char *jobid;
     char *extranonce2;
 } bm_job;
@@ -36,7 +36,7 @@ bm_job construct_bm_job(mining_notify *params, const char *merkle_root, const ui
 
 double test_nonce_value(const bm_job *job, const uint32_t nonce, const uint32_t rolled_version);
 
-char *extranonce_2_generate(uint32_t extranonce_2, uint32_t length);
+char *extranonce_2_generate(uint64_t extranonce_2, uint32_t length);
 
 uint32_t increment_bitmask(const uint32_t value, const uint32_t mask);
 

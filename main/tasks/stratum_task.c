@@ -38,7 +38,7 @@
 static const char * TAG = "stratum_task";
 
 static StratumApiV1Message stratum_api_v1_message = {};
-static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192};
+static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192.0};
 
 static const char * primary_stratum_url;
 static uint16_t primary_stratum_port;
@@ -350,7 +350,7 @@ void stratum_task(void * pvParameters)
             } else if (stratum_api_v1_message.method == MINING_SET_DIFFICULTY) {
                 if (stratum_api_v1_message.new_difficulty != SYSTEM_TASK_MODULE.stratum_difficulty) {
                     SYSTEM_TASK_MODULE.stratum_difficulty = stratum_api_v1_message.new_difficulty;
-                    ESP_LOGI(TAG, "Set stratum difficulty: %ld", SYSTEM_TASK_MODULE.stratum_difficulty);
+                    ESP_LOGI(TAG, "Set stratum difficulty: %.2f", SYSTEM_TASK_MODULE.stratum_difficulty);
                 }
             } else if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK ||
                     stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {

@@ -413,12 +413,12 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
     } else if (message->method == MINING_SET_DIFFICULTY) {
         cJSON * params = cJSON_GetObjectItem(json, "params");
         cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
-        if (p0 == NULL) {
+        if (p0 == NULL || !cJSON_IsNumber(p0)) {
             ESP_LOGE(TAG, "Invalid params in mining.set_difficulty");
             message->method = STRATUM_UNKNOWN;
             goto done;
         }
-        uint32_t difficulty = p0->valueint;
+        double difficulty = p0->valuedouble;
         message->new_difficulty = difficulty;
     } else if (message->method == MINING_SET_VERSION_MASK) {
         cJSON * params = cJSON_GetObjectItem(json, "params");
@@ -501,8 +501,8 @@ int STRATUM_V1_suggest_difficulty(esp_transport_handle_t transport, int send_uid
 {
     char difficulty_msg[BUFFER_SIZE];
     snprintf(difficulty_msg, sizeof(difficulty_msg),
-        "{\"id\":%d,\"method\":\"mining.suggest_difficulty\",\"params\":[%ld]}\n",
-        send_uid, difficulty);
+        "{\"id\":%d,\"method\":\"mining.suggest_difficulty\",\"params\":[%u]}\n",
+        send_uid, (unsigned int)difficulty);
     debug_stratum_tx(difficulty_msg);
 
     return esp_transport_write(transport, difficulty_msg, strlen(difficulty_msg), TRANSPORT_TIMEOUT_MS);

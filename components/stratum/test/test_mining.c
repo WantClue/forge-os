@@ -136,6 +136,10 @@ TEST_CASE("Test extranonce 2 generation", "[mining extranonce2]")
     char *fifth = extranonce_2_generate(UINT_MAX / 2, 6);
     TEST_ASSERT_EQUAL_STRING("ffffff7f0000", fifth);
     free(fifth);
+
+    char *sixth = extranonce_2_generate(UINT64_C(1), 8);
+    TEST_ASSERT_EQUAL_STRING("0100000000000000", sixth);
+    free(sixth);
 }
 
 TEST_CASE("Test nonce diff checking", "[mining test_nonce][not-on-qemu]")
