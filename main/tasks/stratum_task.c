@@ -111,6 +111,22 @@ void cleanQueue(GlobalState * GLOBAL_STATE) {
     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
 }
 
+static bool has_active_jobs(GlobalState * GLOBAL_STATE)
+{
+    bool has_active = false;
+
+    pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
+    for (int i = 0; i < 128; i = i + 4) {
+        if (GLOBAL_STATE->valid_jobs[i] != 0) {
+            has_active = true;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+
+    return has_active;
+}
+
 void stratum_reset_uid(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGI(TAG, "Resetting stratum uid");
@@ -336,9 +352,15 @@ void stratum_task(void * pvParameters)
 
             if (stratum_api_v1_message.method == MINING_NOTIFY) {
                 SYSTEM_notify_new_ntime(GLOBAL_STATE, stratum_api_v1_message.mining_notification->ntime);
-                if (stratum_api_v1_message.mining_notification->clean_jobs &&
-                    (GLOBAL_STATE->stratum_queue.count > 0 || GLOBAL_STATE->ASIC_jobs_queue.count > 0)) {
-                    cleanQueue(GLOBAL_STATE);
+                if (stratum_api_v1_message.mining_notification->clean_jobs) {
+                    if (GLOBAL_STATE->stratum_queue.count > 0 ||
+                        GLOBAL_STATE->ASIC_jobs_queue.count > 0 ||
+                        has_active_jobs(GLOBAL_STATE)) {
+                        cleanQueue(GLOBAL_STATE);
+                    }
+                } else if (GLOBAL_STATE->ASIC_jobs_queue.count > 0) {
+                    ESP_LOGI(TAG, "New notify: dropping pending ASIC jobs from older work");
+                    ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
                 }
                 if (GLOBAL_STATE->stratum_queue.count == QUEUE_SIZE) {
                     mining_notify * next_notify_json_str = (mining_notify *) queue_dequeue(&GLOBAL_STATE->stratum_queue);
