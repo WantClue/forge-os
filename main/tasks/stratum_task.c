@@ -352,18 +352,21 @@ void stratum_task(void * pvParameters)
 
             if (stratum_api_v1_message.method == MINING_NOTIFY) {
                 SYSTEM_notify_new_ntime(GLOBAL_STATE, stratum_api_v1_message.mining_notification->ntime);
+                bool stratum_queue_has_work = queue_count(&GLOBAL_STATE->stratum_queue) > 0;
+                bool asic_queue_has_work = queue_count(&GLOBAL_STATE->ASIC_jobs_queue) > 0;
                 if (stratum_api_v1_message.mining_notification->clean_jobs) {
-                    if (GLOBAL_STATE->stratum_queue.count > 0 ||
-                        GLOBAL_STATE->ASIC_jobs_queue.count > 0 ||
-                        has_active_jobs(GLOBAL_STATE)) {
+                    if (stratum_queue_has_work || asic_queue_has_work || has_active_jobs(GLOBAL_STATE)) {
                         cleanQueue(GLOBAL_STATE);
                     }
-                } else if (GLOBAL_STATE->ASIC_jobs_queue.count > 0) {
+                } else if (asic_queue_has_work) {
                     ESP_LOGI(TAG, "New notify: dropping pending ASIC jobs from older work");
+                    pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
                     ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
+                    pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
                 }
-                if (GLOBAL_STATE->stratum_queue.count == QUEUE_SIZE) {
-                    mining_notify * next_notify_json_str = (mining_notify *) queue_dequeue(&GLOBAL_STATE->stratum_queue);
+                void *next_notify = NULL;
+                if (queue_dequeue_if_full(&GLOBAL_STATE->stratum_queue, &next_notify)) {
+                    mining_notify * next_notify_json_str = (mining_notify *) next_notify;
                     STRATUM_V1_free_mining_notify(next_notify_json_str);
                 }
                 stratum_api_v1_message.mining_notification->difficulty = SYSTEM_TASK_MODULE.stratum_difficulty;
