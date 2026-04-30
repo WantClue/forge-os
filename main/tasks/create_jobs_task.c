@@ -12,7 +12,7 @@
 
 static const char *TAG = "create_jobs_task";
 
-#define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
+#define QUEUE_LOW_WATER_MARK 1
 
 static bool should_generate_more_work(GlobalState *GLOBAL_STATE);
 static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint64_t extranonce_2);
@@ -32,6 +32,15 @@ void create_jobs_task(void *pvParameters)
 
         ESP_LOGI(TAG, "New Work Dequeued %s", mining_notification->job_id);
 
+        if (GLOBAL_STATE->abandon_work == 1)
+        {
+            GLOBAL_STATE->abandon_work = 0;
+            pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
+            ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
+            pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+            xSemaphoreGive(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore);
+        }
+
         if (GLOBAL_STATE->new_stratum_version_rolling_msg) {
             ESP_LOGI(TAG, "Set chip version rolls %i", (int)(GLOBAL_STATE->version_mask >> 13));
             //(GLOBAL_STATE->ASIC_functions.set_version_mask)(GLOBAL_STATE->version_mask);
@@ -40,7 +49,7 @@ void create_jobs_task(void *pvParameters)
         }
 
         uint64_t extranonce_2 = 0;
-        while (GLOBAL_STATE->stratum_queue.count < 1 && GLOBAL_STATE->abandon_work == 0)
+        while (queue_count(&GLOBAL_STATE->stratum_queue) < 1 && GLOBAL_STATE->abandon_work == 0)
         {
             if (should_generate_more_work(GLOBAL_STATE))
             {
@@ -59,7 +68,9 @@ void create_jobs_task(void *pvParameters)
         if (GLOBAL_STATE->abandon_work == 1)
         {
             GLOBAL_STATE->abandon_work = 0;
+            pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
             ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
+            pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
             xSemaphoreGive(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore);
         }
 
@@ -69,7 +80,7 @@ void create_jobs_task(void *pvParameters)
 
 static bool should_generate_more_work(GlobalState *GLOBAL_STATE)
 {
-    return GLOBAL_STATE->ASIC_jobs_queue.count < QUEUE_LOW_WATER_MARK;
+    return queue_count(&GLOBAL_STATE->ASIC_jobs_queue) < QUEUE_LOW_WATER_MARK;
 }
 
 static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint64_t extranonce_2)
