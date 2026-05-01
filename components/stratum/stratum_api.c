@@ -141,7 +141,6 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
     char *line = NULL;
     char recv_buffer[BUFFER_SIZE];
     int nbytes;
-    int timeout_count = 0;
 
     while (!strstr(json_rpc_buffer, "\n")) {
         memset(recv_buffer, 0, BUFFER_SIZE);
@@ -169,20 +168,10 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
             }
             return NULL;
         }
-        if (nbytes == 0) {
-            timeout_count++;
-            if (timeout_count >= 10) {
-                ESP_LOGW(TAG, "Transport read timed out %d times, giving up", timeout_count);
-                free(json_rpc_buffer);
-                json_rpc_buffer = NULL;
-                json_rpc_buffer_size = 0;
-                return NULL;
-            }
-            continue;
+        if (nbytes > 0) {
+            realloc_json_buffer(nbytes);
+            strncat(json_rpc_buffer, recv_buffer, nbytes);
         }
-        timeout_count = 0;
-        realloc_json_buffer(nbytes);
-        strncat(json_rpc_buffer, recv_buffer, nbytes);
     }
 
     // Extract the line
