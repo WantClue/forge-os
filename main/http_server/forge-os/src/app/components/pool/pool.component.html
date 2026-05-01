@@ -8,9 +8,9 @@
                         <div class="field grid p-fluid">
                             <label htmlFor="stratumURL" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Host:</label>
                             <div class="col-12 md:col-10">
-                                <input pInputText id="stratumURL" type="text" formControlName="stratumURL" />
+                                <input pInputText id="stratumURL" type="text" formControlName="stratumURL" (change)="onUrlChange('stratum')" />
                                 <div>
-                                    <small>Do not include 'stratum+tcp://' or port.</small>
+                                    <small>You may paste a full URL; protocol and port will be split automatically.</small>
                                 </div>
                             </div>
                         </div>
@@ -59,9 +59,9 @@
                         <div class="field grid p-fluid">
                             <label htmlFor="fallbackStratumURL" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Host:</label>
                             <div class="col-12 md:col-10">
-                                <input pInputText id="fallbackStratumURL" type="text" formControlName="fallbackStratumURL" />
+                                <input pInputText id="fallbackStratumURL" type="text" formControlName="fallbackStratumURL" (change)="onUrlChange('fallbackStratum')" />
                                 <div>
-                                    <small>Do not include 'stratum+tcp://' or port.</small>
+                                    <small>You may paste a full URL; protocol and port will be split automatically.</small>
                                 </div>
                             </div>
                         </div>
