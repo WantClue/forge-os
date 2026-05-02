@@ -10,6 +10,8 @@
 #include "stratum_task.h"
 #include "work_queue.h"
 #include "esp_wifi.h"
+#include "esp_netif.h"
+#include "esp_transport_ssl.h"
 #include <esp_sntp.h>
 #include <time.h>
 #include <string.h>
@@ -55,6 +57,109 @@ struct timeval tcp_rcv_timeout = {
 
 static uint16_t primary_stratum_tls;
 static char * primary_stratum_cert;
+
+typedef struct {
+    struct sockaddr_storage dest_addr;
+    socklen_t addrlen;
+    int addr_family;
+    int ip_protocol;
+    char host_ip[INET6_ADDRSTRLEN + 16];
+} stratum_connection_info_t;
+
+static esp_err_t resolve_stratum_address(const char *hostname, uint16_t port, stratum_connection_info_t *conn_info)
+{
+    if (hostname == NULL || conn_info == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (port == 0) {
+        ESP_LOGE(TAG, "Invalid port: 0");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    char port_str[6];
+    snprintf(port_str, sizeof(port_str), "%u", port);
+
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = IPPROTO_TCP,
+        .ai_flags = AI_NUMERICSERV,
+    };
+
+    struct addrinfo *res = NULL;
+    int gai_err = getaddrinfo(hostname, port_str, &hints, &res);
+    if (gai_err != 0 || res == NULL) {
+        ESP_LOGE(TAG, "DNS resolution failed for %s:%u (error: %d)", hostname, port, gai_err);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    memset(conn_info, 0, sizeof(*conn_info));
+    conn_info->addr_family = AF_UNSPEC;
+
+    const int preferred_families[] = { AF_INET, AF_INET6 };
+    const struct addrinfo *selected = NULL;
+
+    for (size_t i = 0; i < sizeof(preferred_families) / sizeof(preferred_families[0]) && selected == NULL; i++) {
+        for (const struct addrinfo *p = res; p != NULL; p = p->ai_next) {
+            if (p->ai_family == preferred_families[i]) {
+                selected = p;
+                break;
+            }
+        }
+    }
+
+    if (selected == NULL) {
+        ESP_LOGE(TAG, "No supported address family found for %s", hostname);
+        freeaddrinfo(res);
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    memcpy(&conn_info->dest_addr, selected->ai_addr, selected->ai_addrlen);
+    conn_info->addrlen = selected->ai_addrlen;
+    conn_info->addr_family = selected->ai_family;
+    conn_info->ip_protocol = (selected->ai_family == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
+
+    if (selected->ai_family == AF_INET6) {
+        struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&conn_info->dest_addr;
+        if (IN6_IS_ADDR_LINKLOCAL(&addr6->sin6_addr) && addr6->sin6_scope_id == 0) {
+            esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            if (netif) {
+                int index = esp_netif_get_netif_impl_index(netif);
+                if (index >= 0) {
+                    addr6->sin6_scope_id = (uint32_t)index;
+                }
+            }
+        }
+    }
+
+    const void *src_addr = NULL;
+    if (conn_info->addr_family == AF_INET) {
+        struct sockaddr_in *addr4 = (struct sockaddr_in *)&conn_info->dest_addr;
+        src_addr = &addr4->sin_addr;
+    } else {
+        struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&conn_info->dest_addr;
+        src_addr = &addr6->sin6_addr;
+    }
+
+    if (inet_ntop(conn_info->addr_family, src_addr, conn_info->host_ip, sizeof(conn_info->host_ip)) == NULL) {
+        ESP_LOGW(TAG, "inet_ntop failed (errno: %d)", errno);
+        snprintf(conn_info->host_ip, sizeof(conn_info->host_ip), "[invalid %s addr]",
+                 (conn_info->addr_family == AF_INET) ? "IPv4" : "IPv6");
+    } else if (conn_info->addr_family == AF_INET6) {
+        struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&conn_info->dest_addr;
+        if (IN6_IS_ADDR_LINKLOCAL(&addr6->sin6_addr) && addr6->sin6_scope_id != 0) {
+            char zone[16];
+            snprintf(zone, sizeof(zone), "%%%lu", (unsigned long)addr6->sin6_scope_id);
+            strncat(conn_info->host_ip, zone, sizeof(conn_info->host_ip) - strlen(conn_info->host_ip) - 1);
+            conn_info->host_ip[sizeof(conn_info->host_ip) - 1] = '\0';
+        }
+    }
+
+    ESP_LOGI(TAG, "Resolved %s:%u -> %s", hostname, port, conn_info->host_ip);
+
+    freeaddrinfo(res);
+    return ESP_OK;
+}
 
 static void set_socket_options(esp_transport_handle_t transport)
 {
@@ -151,8 +256,8 @@ void stratum_primary_heartbeat(void * pvParameters)
             continue;
         }
 
-        struct hostent *primary_dns_addr = gethostbyname(primary_stratum_url);
-        if (primary_dns_addr == NULL) {
+        stratum_connection_info_t conn_info;
+        if (resolve_stratum_address(primary_stratum_url, primary_stratum_port, &conn_info) != ESP_OK) {
             ESP_LOGD(TAG, "Heartbeat. Failed DNS check for: %s!", primary_stratum_url);
             vTaskDelay(60000 / portTICK_PERIOD_MS);
             continue;
@@ -167,9 +272,12 @@ void stratum_primary_heartbeat(void * pvParameters)
             continue;
         }
 
-        esp_err_t err = esp_transport_connect(transport, primary_stratum_url, primary_stratum_port, TRANSPORT_TIMEOUT_MS);
+        if (tls != DISABLED) {
+            esp_transport_ssl_set_common_name(transport, primary_stratum_url);
+        }
+        esp_err_t err = esp_transport_connect(transport, conn_info.host_ip, primary_stratum_port, TRANSPORT_TIMEOUT_MS);
         if (err != ESP_OK) {
-            ESP_LOGD(TAG, "Heartbeat. Failed connect check: %s:%d (errno %d: %s)", primary_stratum_url, primary_stratum_port, err, strerror(err));
+            ESP_LOGD(TAG, "Heartbeat. Failed connect check: %s:%d (%s) (errno %d: %s)", primary_stratum_url, primary_stratum_port, conn_info.host_ip, err, strerror(err));
             esp_transport_close(transport);
             esp_transport_destroy(transport);
             vTaskDelay(60000 / portTICK_PERIOD_MS);
@@ -249,18 +357,15 @@ void stratum_task(void * pvParameters)
         stratum_url = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_url : GLOBAL_STATE->SYSTEM_MODULE.pool_url;
         port = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_port : GLOBAL_STATE->SYSTEM_MODULE.pool_port;
 
-        struct hostent *dns_addr = gethostbyname(stratum_url);
-        if (dns_addr == NULL) {
+        stratum_connection_info_t conn_info;
+        if (resolve_stratum_address(stratum_url, port, &conn_info) != ESP_OK) {
             ESP_LOGE(TAG, "DNS resolution failed for %s", stratum_url);
             retry_attempts++;
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             continue;
         }
 
-        char host_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, (void *)dns_addr->h_addr_list[0], host_ip, sizeof(host_ip));
-
-        ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)", stratum_url, port, host_ip);
+        ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)", stratum_url, port, conn_info.host_ip);
 
         tls = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_tls : GLOBAL_STATE->SYSTEM_MODULE.pool_tls;
         cert = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_cert : GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
@@ -277,8 +382,11 @@ void stratum_task(void * pvParameters)
         }
         retry_critical_attempts = 0;
 
-        ESP_LOGI(TAG, "Transport initialized, connecting to %s:%d", stratum_url, port);
-        esp_err_t ret = esp_transport_connect(GLOBAL_STATE->transport, stratum_url, port, TRANSPORT_TIMEOUT_MS);
+        if (tls != DISABLED) {
+            esp_transport_ssl_set_common_name(GLOBAL_STATE->transport, stratum_url);
+        }
+        ESP_LOGI(TAG, "Transport initialized, connecting to %s:%d (%s)", stratum_url, port, conn_info.host_ip);
+        esp_err_t ret = esp_transport_connect(GLOBAL_STATE->transport, conn_info.host_ip, port, TRANSPORT_TIMEOUT_MS);
         if (ret != ESP_OK) {
             retry_attempts++;
             ESP_LOGE(TAG, "Transport unable to connect to %s:%d (errno %d). Attempt: %d", stratum_url, port, ret, retry_attempts);
@@ -316,8 +424,12 @@ void stratum_task(void * pvParameters)
         //mining.authorize - ID: 3
         STRATUM_V1_authorize(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, username, password);
 
-        //mining.suggest_difficulty - ID: 4
-        STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, STRATUM_DIFFICULTY);
+#ifdef CONFIG_STRATUM_SUGGEST_DIFFICULTY
+        if (STRATUM_DIFFICULTY > 0) {
+            // mining.suggest_difficulty - optional; some pools reject this method.
+            STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, STRATUM_DIFFICULTY);
+        }
+#endif
 
         // Everything is set up, lets make sure we don't abandon work unnecessarily.
         GLOBAL_STATE->abandon_work = 0;
