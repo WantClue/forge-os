@@ -45,7 +45,7 @@ export class PoolComponent implements OnInit {
             Validators.required,
             Validators.pattern(/^[^:]*$/),
             Validators.min(0),
-            Validators.max(65353)
+            Validators.max(65535)
           ]],
           fallbackStratumURL: [info.fallbackStratumURL, [
             Validators.pattern(/^(?!.*stratum\+tcp:\/\/).*$/),
@@ -54,7 +54,7 @@ export class PoolComponent implements OnInit {
             Validators.required,
             Validators.pattern(/^[^:]*$/),
             Validators.min(0),
-            Validators.max(65353)
+            Validators.max(65535)
           ]],
           stratumUser: [info.stratumUser, [Validators.required]],
           stratumPassword: ['*****', [Validators.required]],
@@ -69,6 +69,9 @@ export class PoolComponent implements OnInit {
   }
 
   public updateSystem() {
+    this.onUrlChange('stratum');
+    this.onUrlChange('fallbackStratum');
+
     const form = this.form.getRawValue();
 
     if (form.stratumPassword === '*****') {
@@ -89,6 +92,46 @@ export class PoolComponent implements OnInit {
           this.savedChanges = false;
         }
       });
+  }
+
+  private extractPort(url: string): { cleanUrl: string, port?: number } {
+    const match = url.match(/:(\d{1,5})$/);
+    if (!match) {
+      return { cleanUrl: url };
+    }
+
+    return {
+      cleanUrl: url.slice(0, match.index),
+      port: parseInt(match[1], 10)
+    };
+  }
+
+  public onUrlChange(poolType: 'stratum' | 'fallbackStratum') {
+    const urlControl = this.form.get(`${poolType}URL`);
+    const portControl = this.form.get(`${poolType}Port`);
+    const tlsControl = this.form.get(`${poolType}TLS`);
+    if (!urlControl || !portControl || !tlsControl) return;
+
+    let urlValue = (urlControl.value || '').trim();
+    if (!urlValue) return;
+
+    const prefixes = [
+      { prefix: 'stratum+tcp://', tlsMode: 0 },
+      { prefix: 'stratum+tls://', tlsMode: 1 },
+      { prefix: 'stratum+ssl://', tlsMode: 1 }
+    ];
+
+    const matched = prefixes.find(({ prefix }) => urlValue.toLowerCase().startsWith(prefix));
+    if (matched) {
+      urlValue = urlValue.slice(matched.prefix.length);
+      tlsControl.setValue(matched.tlsMode);
+    }
+
+    const { cleanUrl, port } = this.extractPort(urlValue);
+    if (port !== undefined && port >= 0 && port <= 65535) {
+      portControl.setValue(port);
+    }
+    urlControl.setValue(cleanUrl);
   }
 
   showStratumPassword: boolean = false;

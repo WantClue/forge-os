@@ -1,6 +1,9 @@
 #include <fcntl.h>
+#include <ctype.h>
 #include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/param.h>
 
 #include "esp_chip_info.h"
@@ -41,6 +44,80 @@
 
 static const char * TAG = "http_server";
 static const char * CORS_TAG = "CORS";
+
+static bool parse_port(const char *value, uint16_t *port)
+{
+    unsigned long parsed = 0;
+
+    if (value == NULL || *value == '\0') {
+        return false;
+    }
+
+    for (const char *p = value; *p != '\0'; p++) {
+        if (!isdigit((unsigned char)*p)) {
+            return false;
+        }
+        parsed = parsed * 10 + (*p - '0');
+        if (parsed > UINT16_MAX) {
+            return false;
+        }
+    }
+
+    *port = (uint16_t)parsed;
+    return true;
+}
+
+typedef struct {
+    bool parsed_port;
+    bool parsed_tls;
+} stratum_url_parse_result_t;
+
+static stratum_url_parse_result_t save_stratum_url(const char *url_key, const char *port_key, const char *tls_key, const char *value)
+{
+    stratum_url_parse_result_t result = {0};
+    const char *host = value;
+    int tls_mode = -1;
+
+    if (strncasecmp(host, "stratum+tcp://", strlen("stratum+tcp://")) == 0) {
+        host += strlen("stratum+tcp://");
+        tls_mode = DISABLED;
+    } else if (strncasecmp(host, "stratum+tls://", strlen("stratum+tls://")) == 0) {
+        host += strlen("stratum+tls://");
+        tls_mode = BUNDLED_CRT;
+    } else if (strncasecmp(host, "stratum+ssl://", strlen("stratum+ssl://")) == 0) {
+        host += strlen("stratum+ssl://");
+        tls_mode = BUNDLED_CRT;
+    }
+
+    char *normalized = strdup(host);
+    if (normalized == NULL) {
+        return result;
+    }
+
+    char *path = strchr(normalized, '/');
+    if (path != NULL) {
+        *path = '\0';
+    }
+
+    char *port_start = strrchr(normalized, ':');
+    if (port_start != NULL) {
+        uint16_t port;
+        if (parse_port(port_start + 1, &port)) {
+            *port_start = '\0';
+            nvs_config_set_u16(port_key, port);
+            result.parsed_port = true;
+        }
+    }
+
+    nvs_config_set_string(url_key, normalized);
+    if (tls_mode >= 0) {
+        nvs_config_set_u16(tls_key, (uint16_t)tls_mode);
+        result.parsed_tls = true;
+    }
+
+    free(normalized);
+    return result;
+}
 
 /* Handler for WiFi scan endpoint */
 static esp_err_t GET_wifi_scan(httpd_req_t * req)
@@ -537,11 +614,14 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
         return ESP_OK;
     }
 
+    stratum_url_parse_result_t stratum_url_result = {0};
+    stratum_url_parse_result_t fallback_stratum_url_result = {0};
+
     if (cJSON_IsString(item = cJSON_GetObjectItem(root, "stratumURL"))) {
-        nvs_config_set_string(NVS_CONFIG_STRATUM_URL, item->valuestring);
+        stratum_url_result = save_stratum_url(NVS_CONFIG_STRATUM_URL, NVS_CONFIG_STRATUM_PORT, NVS_CONFIG_STRATUM_TLS, item->valuestring);
     }
     if (cJSON_IsString(item = cJSON_GetObjectItem(root, "fallbackStratumURL"))) {
-        nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_URL, item->valuestring);
+        fallback_stratum_url_result = save_stratum_url(NVS_CONFIG_FALLBACK_STRATUM_URL, NVS_CONFIG_FALLBACK_STRATUM_PORT, NVS_CONFIG_FALLBACK_STRATUM_TLS, item->valuestring);
     }
     if (cJSON_IsString(item = cJSON_GetObjectItem(root, "stratumUser"))) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_USER, item->valuestring);
@@ -555,19 +635,19 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if (cJSON_IsString(item = cJSON_GetObjectItem(root, "fallbackStratumPassword"))) {
         nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_PASS, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "stratumPort")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "stratumPort")) != NULL && !stratum_url_result.parsed_port) {
         nvs_config_set_u16(NVS_CONFIG_STRATUM_PORT, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumPort")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "fallbackStratumPort")) != NULL && !fallback_stratum_url_result.parsed_port) {
         nvs_config_set_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "stratumTLS")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "stratumTLS")) != NULL && !stratum_url_result.parsed_tls) {
         nvs_config_set_u16(NVS_CONFIG_STRATUM_TLS, item->valueint);
     }
     if (cJSON_IsString(item = cJSON_GetObjectItem(root, "stratumCert"))) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_CERT, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumTLS")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "fallbackStratumTLS")) != NULL && !fallback_stratum_url_result.parsed_tls) {
         nvs_config_set_u16(NVS_CONFIG_FALLBACK_STRATUM_TLS, item->valueint);
     }
     if (cJSON_IsString(item = cJSON_GetObjectItem(root, "fallbackStratumCert"))) {

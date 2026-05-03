@@ -114,6 +114,13 @@ menu "Stratum Configuration"
         help
             A starting difficulty to use with the pool.
 
+    config STRATUM_SUGGEST_DIFFICULTY
+        bool "Send mining.suggest_difficulty"
+        default n
+        help
+            Send mining.suggest_difficulty after connecting. Leave disabled for
+            pools such as f2pool that reject this optional Stratum method.
+
     choice
         prompt "Stratum TLS mode"
         default STRATUM_TLS_DISABLED
