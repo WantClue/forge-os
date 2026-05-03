@@ -47,6 +47,35 @@ void *queue_dequeue(work_queue *queue)
     return next_work;
 }
 
+bool queue_dequeue_if_full(work_queue *queue, void **work)
+{
+    bool dequeued = false;
+
+    pthread_mutex_lock(&queue->lock);
+
+    if (queue->count == QUEUE_SIZE)
+    {
+        *work = queue->buffer[queue->head];
+        queue->head = (queue->head + 1) % QUEUE_SIZE;
+        queue->count--;
+        pthread_cond_signal(&queue->not_full);
+        dequeued = true;
+    }
+
+    pthread_mutex_unlock(&queue->lock);
+
+    return dequeued;
+}
+
+int queue_count(work_queue *queue)
+{
+    pthread_mutex_lock(&queue->lock);
+    int count = queue->count;
+    pthread_mutex_unlock(&queue->lock);
+
+    return count;
+}
+
 void queue_clear(work_queue *queue)
 {
     pthread_mutex_lock(&queue->lock);
