@@ -232,22 +232,6 @@ void cleanQueue(GlobalState * GLOBAL_STATE) {
     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
 }
 
-static bool has_active_jobs(GlobalState * GLOBAL_STATE)
-{
-    bool has_active = false;
-
-    pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
-    for (int i = 0; i < 128; i = i + 4) {
-        if (GLOBAL_STATE->valid_jobs[i] != 0) {
-            has_active = true;
-            break;
-        }
-    }
-    pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
-
-    return has_active;
-}
-
 void stratum_reset_uid(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGI(TAG, "Resetting stratum uid");
