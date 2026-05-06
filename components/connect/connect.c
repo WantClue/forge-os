@@ -16,7 +16,7 @@
 #include "main.h"
 
 // Maximum number of access points to scan
-#define MAX_AP_COUNT 20
+#define MAX_AP_COUNT WIFI_SCAN_RESULT_LIMIT
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
@@ -222,7 +222,12 @@ esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count)
         .ssid = 0,
         .bssid = 0,
         .channel = 0,
-        .show_hidden = false
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active = {
+            .min = 100,
+            .max = 300,
+        },
     };
 
     esp_err_t err = esp_wifi_scan_start(&scan_config, false);
@@ -233,7 +238,7 @@ esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count)
         return err;
     }
 
-    uint16_t retries_remaining = 10;
+    uint16_t retries_remaining = 15;
     while (is_scanning) {
         retries_remaining--;
         if (retries_remaining == 0) {

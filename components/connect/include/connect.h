@@ -7,6 +7,8 @@
 #include "freertos/event_groups.h"
 #include "esp_wifi_types.h"
 
+#define WIFI_SCAN_RESULT_LIMIT 50
+
 // Structure to hold WiFi scan results
 typedef struct {
     char ssid[33];  // 32 chars + null terminator
