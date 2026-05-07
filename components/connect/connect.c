@@ -2,6 +2,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -60,6 +61,9 @@ typedef enum {
     WIFI_SCAN_MODE_CONNECT,
 } wifi_scan_mode_t;
 
+#define RECONNECT_DELAY_MIN_MS 2000
+#define RECONNECT_DELAY_MAX_MS 30000
+
 static bool is_scanning = false;
 static uint16_t ap_number = 0;
 static wifi_ap_record_t ap_info[MAX_AP_COUNT];
@@ -67,6 +71,9 @@ static wifi_scan_mode_t s_scan_mode = WIFI_SCAN_MODE_NONE;
 static char s_target_ssid[33];
 static char s_target_pass[65];
 static wifi_auth_mode_t s_target_authmode = WIFI_AUTH_OPEN;
+
+static esp_timer_handle_t s_reconnect_timer = NULL;
+static uint32_t s_reconnect_delay_ms = RECONNECT_DELAY_MIN_MS;
 
 
 esp_err_t get_wifi_current_rssi(int8_t *rssi)
@@ -197,6 +204,58 @@ static esp_err_t wifi_connect_best_ap_from_scan_results(void)
     }
 
     return esp_wifi_connect();
+}
+
+static void schedule_reconnect(void);
+
+static void reconnect_timer_cb(void *arg)
+{
+    ESP_LOGI(TAG, "Reconnect timer fired (next backoff %lu ms)", (unsigned long) s_reconnect_delay_ms);
+
+    esp_err_t err = wifi_connect_best_ap();
+    if (err == ESP_OK) {
+        return;
+    }
+
+    ESP_LOGW(TAG, "Strongest-AP reconnect unavailable (%s), using fallback connect", esp_err_to_name(err));
+    err = wifi_connect_with_fallback();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Fallback Wi-Fi reconnect failed: %s, will retry", esp_err_to_name(err));
+        schedule_reconnect();
+    }
+}
+
+static void schedule_reconnect(void)
+{
+    if (s_reconnect_timer == NULL) {
+        const esp_timer_create_args_t args = {
+            .callback = reconnect_timer_cb,
+            .name = "wifi_reconnect",
+        };
+        if (esp_timer_create(&args, &s_reconnect_timer) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to create reconnect timer");
+            return;
+        }
+    }
+
+    esp_timer_stop(s_reconnect_timer);
+
+    ESP_LOGI(TAG, "Scheduling Wi-Fi reconnect in %lu ms", (unsigned long) s_reconnect_delay_ms);
+    if (esp_timer_start_once(s_reconnect_timer, (uint64_t) s_reconnect_delay_ms * 1000ULL) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start reconnect timer");
+        return;
+    }
+
+    uint32_t next = s_reconnect_delay_ms * 2;
+    if (next > RECONNECT_DELAY_MAX_MS) {
+        next = RECONNECT_DELAY_MAX_MS;
+    }
+    s_reconnect_delay_ms = next;
+}
+
+static void reset_reconnect_backoff(void)
+{
+    s_reconnect_delay_ms = RECONNECT_DELAY_MIN_MS;
 }
 
 // Function to scan for available WiFi networks
@@ -335,14 +394,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
             ESP_LOGI(TAG, "Retrying Wi-Fi connection...");
             MINER_set_wifi_status(WIFI_RETRYING, s_retry_num, event->reason);
 
-            esp_err_t err = wifi_connect_best_ap();
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "Strongest-AP reconnect unavailable, using fallback connect");
-                err = wifi_connect_with_fallback();
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Fallback Wi-Fi reconnect failed: %s", esp_err_to_name(err));
-                }
-            }
+            schedule_reconnect();
         }
     }
 
@@ -352,6 +404,15 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
 
         ESP_LOGI(TAG, "Nano ip: %s", _ip_addr_str);
         s_retry_num = 0;
+        reset_reconnect_backoff();
+
+        // Clear bssid_set so the WiFi driver can BTM/RM-roam during this session.
+        // The next manual reconnect path will re-pick the best AP via scan.
+        esp_err_t cfg_err = set_sta_config_for_target(NULL, 0);
+        if (cfg_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to clear bssid lock after GOT_IP: %s", esp_err_to_name(cfg_err));
+        }
+
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         MINER_set_wifi_status(WIFI_CONNECTED, 0, 0);
     }
