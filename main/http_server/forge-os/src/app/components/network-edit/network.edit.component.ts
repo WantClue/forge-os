@@ -1,9 +1,9 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { finalize } from 'rxjs/operators';
-import { DialogService } from 'src/app/services/dialog.service';
+import { ModalComponent } from '../modal/modal.component';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
 
@@ -19,10 +19,12 @@ interface WifiNetwork {
   styleUrls: ['./network.edit.component.scss']
 })
 export class NetworkEditComponent implements OnInit {
+  @ViewChild('wifiScanModal') wifiScanModal?: ModalComponent;
 
   public form!: FormGroup;
   public savedChanges: boolean = false;
   public scanning: boolean = false;
+  public scannedNetworks: WifiNetwork[] = [];
 
   @Input() uri = '';
 
@@ -32,8 +34,7 @@ export class NetworkEditComponent implements OnInit {
     private toastr: ToastrService,
     private toastrService: ToastrService,
     private loadingService: LoadingService,
-    private http: HttpClient,
-    private dialogService: DialogService
+    private http: HttpClient
   ) {
 
   }
@@ -86,6 +87,15 @@ export class NetworkEditComponent implements OnInit {
     this.showWifiPassword = !this.showWifiPassword;
   }
 
+  public selectWifiNetwork(selectedSsid: string) {
+    this.form.patchValue({ ssid: selectedSsid });
+    this.form.markAsDirty();
+
+    if (this.wifiScanModal) {
+      this.wifiScanModal.isVisible = false;
+    }
+  }
+
   public scanWifi() {
     this.scanning = true;
     this.http.get<{networks: WifiNetwork[]}>('/api/system/wifi/scan')
@@ -94,37 +104,23 @@ export class NetworkEditComponent implements OnInit {
       )
       .subscribe({
         next: (response) => {
-          // Sort networks by signal strength (highest first)
-          const networks = response.networks.sort((a, b) => b.rssi - a.rssi);
+          const networks = response.networks
+            .filter(network => network.ssid.trim().length > 0)
+            .sort((a, b) => b.rssi - a.rssi);
 
-          // filter out poor wifi connections
-          const poorNetworks = networks.filter(network => network.rssi >= -80);
-
-          // Remove duplicate Network Names and show highest signal strength only
-          const uniqueNetworks = poorNetworks.reduce((acc, network) => {
+          // Keep one row per SSID and preserve the strongest reading for that SSID.
+          const uniqueNetworks = networks.reduce((acc, network) => {
             if (!acc[network.ssid] || acc[network.ssid].rssi < network.rssi) {
               acc[network.ssid] = network;
             }
             return acc;
           }, {} as { [key: string]: WifiNetwork });
 
-          // Convert the object back to an array
-          const filteredNetworks = Object.values(uniqueNetworks);
+          this.scannedNetworks = Object.values(uniqueNetworks);
 
-          // Create dialog data
-          const dialogData = filteredNetworks.map(n => ({
-            label: `${n.ssid} (${n.rssi}dBm)`,
-            value: n.ssid
-          }));
-
-          // Show dialog with network list
-          this.dialogService.open('Select WiFi Network', dialogData)
-            .subscribe((selectedSsid: string) => {
-              if (selectedSsid) {
-                this.form.patchValue({ ssid: selectedSsid });
-                this.form.markAsDirty();
-              }
-            });
+          if (this.wifiScanModal) {
+            this.wifiScanModal.isVisible = true;
+          }
         },
         error: (err) => {
           this.toastr.error('Failed to scan WiFi networks', 'Error');

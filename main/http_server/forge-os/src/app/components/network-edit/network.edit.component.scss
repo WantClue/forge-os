@@ -246,6 +246,57 @@
   }
 }
 
+.wifi-scan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0 1rem;
+}
+
+.wifi-network-button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.9) !important;
+  border: 1px solid rgba(51, 65, 85, 0.6) !important;
+  color: var(--text-primary) !important;
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(6, 182, 212, 0.65) !important;
+    box-shadow: 0 10px 24px rgba(2, 132, 199, 0.18);
+  }
+}
+
+.wifi-network-label,
+.wifi-network-rssi {
+  pointer-events: none;
+}
+
+.wifi-network-label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wifi-network-rssi {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.wifi-scan-empty {
+  padding: 1rem 0 1.5rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
 
 // Responsive Design
 @media (max-width: 768px) {
@@ -288,5 +339,10 @@
         width: 100%;
       }
     }
+  }
+
+  .wifi-network-button {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

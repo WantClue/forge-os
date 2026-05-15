@@ -35,4 +35,24 @@
             </div>
         </div>
     </form>
+
+    <app-modal #wifiScanModal headline="Select Wi-Fi Network">
+        <div class="wifi-scan-list" *ngIf="scannedNetworks.length; else noNetworksFound">
+            <button
+                *ngFor="let network of scannedNetworks"
+                pButton
+                type="button"
+                class="wifi-network-button"
+                (click)="selectWifiNetwork(network.ssid)">
+                <span class="wifi-network-label">{{ network.ssid }}</span>
+                <span class="wifi-network-rssi">{{ network.rssi }} dBm</span>
+            </button>
+        </div>
+
+        <ng-template #noNetworksFound>
+            <div class="wifi-scan-empty">
+                No visible Wi-Fi networks were found.
+            </div>
+        </ng-template>
+    </app-modal>
 </ng-container>

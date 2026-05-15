@@ -127,7 +127,7 @@ static esp_err_t GET_wifi_scan(httpd_req_t * req)
     // Give some time for the connected flag to take effect
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
-    wifi_ap_record_simple_t ap_records[20];
+    wifi_ap_record_simple_t ap_records[WIFI_SCAN_RESULT_LIMIT];
     uint16_t ap_count = 0;
 
     esp_err_t err = wifi_scan(ap_records, &ap_count);

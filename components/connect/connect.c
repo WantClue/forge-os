@@ -2,6 +2,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -16,7 +17,7 @@
 #include "main.h"
 
 // Maximum number of access points to scan
-#define MAX_AP_COUNT 20
+#define MAX_AP_COUNT WIFI_SCAN_RESULT_LIMIT
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
@@ -54,9 +55,25 @@ static EventGroupHandle_t s_wifi_event_group;
 
 static const char * TAG = "wifi_station";
 
+typedef enum {
+    WIFI_SCAN_MODE_NONE = 0,
+    WIFI_SCAN_MODE_USER,
+    WIFI_SCAN_MODE_CONNECT,
+} wifi_scan_mode_t;
+
+#define RECONNECT_DELAY_MIN_MS 2000
+#define RECONNECT_DELAY_MAX_MS 30000
+
 static bool is_scanning = false;
 static uint16_t ap_number = 0;
 static wifi_ap_record_t ap_info[MAX_AP_COUNT];
+static wifi_scan_mode_t s_scan_mode = WIFI_SCAN_MODE_NONE;
+static char s_target_ssid[33];
+static char s_target_pass[65];
+static wifi_auth_mode_t s_target_authmode = WIFI_AUTH_OPEN;
+
+static esp_timer_handle_t s_reconnect_timer = NULL;
+static uint32_t s_reconnect_delay_ms = RECONNECT_DELAY_MIN_MS;
 
 
 esp_err_t get_wifi_current_rssi(int8_t *rssi)
@@ -72,6 +89,175 @@ esp_err_t get_wifi_current_rssi(int8_t *rssi)
     return err;
 }
 
+static esp_err_t set_sta_config_for_target(const uint8_t *bssid, uint8_t channel)
+{
+    wifi_config_t wifi_sta_config = {
+        .sta =
+            {
+                .threshold.authmode = s_target_authmode,
+                .btm_enabled = 1,
+                .rm_enabled = 1,
+                .scan_method = WIFI_ALL_CHANNEL_SCAN,
+                .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
+                .pmf_cfg =
+                    {
+                        .capable = true,
+                        .required = false
+                    },
+        },
+    };
+
+    strncpy((char *) wifi_sta_config.sta.ssid, s_target_ssid, sizeof(wifi_sta_config.sta.ssid));
+    wifi_sta_config.sta.ssid[sizeof(wifi_sta_config.sta.ssid) - 1] = '\0';
+
+    if (s_target_authmode != WIFI_AUTH_OPEN) {
+        strncpy((char *) wifi_sta_config.sta.password, s_target_pass, sizeof(wifi_sta_config.sta.password));
+        wifi_sta_config.sta.password[sizeof(wifi_sta_config.sta.password) - 1] = '\0';
+    }
+
+    if (bssid != NULL) {
+        wifi_sta_config.sta.bssid_set = 1;
+        memcpy(wifi_sta_config.sta.bssid, bssid, sizeof(wifi_sta_config.sta.bssid));
+        wifi_sta_config.sta.channel = channel;
+    }
+
+    return esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config);
+}
+
+static esp_err_t wifi_connect_with_fallback(void)
+{
+    esp_err_t err = set_sta_config_for_target(NULL, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure fallback STA target: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Connecting to SSID '%s' without BSSID lock", s_target_ssid);
+    return esp_wifi_connect();
+}
+
+static esp_err_t wifi_connect_best_ap(void)
+{
+    if (s_target_ssid[0] == '\0') {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (is_scanning) {
+        ESP_LOGW(TAG, "Cannot start best-AP scan while another scan is running");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    wifi_scan_config_t scan_config = {
+        .ssid = (uint8_t *) s_target_ssid,
+        .bssid = 0,
+        .channel = 0,
+        .show_hidden = false,
+    };
+
+    s_scan_mode = WIFI_SCAN_MODE_CONNECT;
+    is_scanning = true;
+
+    esp_err_t err = esp_wifi_scan_start(&scan_config, false);
+    if (err != ESP_OK) {
+        s_scan_mode = WIFI_SCAN_MODE_NONE;
+        is_scanning = false;
+        ESP_LOGE(TAG, "Wi-Fi best-AP scan start failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Scanning for strongest AP on SSID '%s'", s_target_ssid);
+
+    return ESP_OK;
+}
+
+static esp_err_t wifi_connect_best_ap_from_scan_results(void)
+{
+    int best_idx = -1;
+
+    for (int i = 0; i < ap_number; i++) {
+        if (strncmp((const char *) ap_info[i].ssid, s_target_ssid, sizeof(ap_info[i].ssid)) != 0) {
+            continue;
+        }
+
+        if (best_idx < 0 || ap_info[i].rssi > ap_info[best_idx].rssi) {
+            best_idx = i;
+        }
+    }
+
+    if (best_idx < 0) {
+        ESP_LOGW(TAG, "No AP found for SSID '%s', falling back to default connect", s_target_ssid);
+        return wifi_connect_with_fallback();
+    }
+
+    ESP_LOGI(TAG,
+             "Connecting to strongest AP for '%s': %02x:%02x:%02x:%02x:%02x:%02x rssi=%d channel=%d",
+             s_target_ssid,
+             ap_info[best_idx].bssid[0], ap_info[best_idx].bssid[1], ap_info[best_idx].bssid[2],
+             ap_info[best_idx].bssid[3], ap_info[best_idx].bssid[4], ap_info[best_idx].bssid[5],
+             ap_info[best_idx].rssi,
+             ap_info[best_idx].primary);
+
+    esp_err_t err = set_sta_config_for_target(ap_info[best_idx].bssid, ap_info[best_idx].primary);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure strongest AP target: %s", esp_err_to_name(err));
+        return wifi_connect_with_fallback();
+    }
+
+    return esp_wifi_connect();
+}
+
+static void schedule_reconnect(void);
+
+static void reconnect_timer_cb(void *arg)
+{
+    ESP_LOGI(TAG, "Reconnect timer fired (next backoff %lu ms)", (unsigned long) s_reconnect_delay_ms);
+
+    esp_err_t err = wifi_connect_best_ap();
+    if (err == ESP_OK) {
+        return;
+    }
+
+    ESP_LOGW(TAG, "Strongest-AP reconnect unavailable (%s), using fallback connect", esp_err_to_name(err));
+    err = wifi_connect_with_fallback();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Fallback Wi-Fi reconnect failed: %s, will retry", esp_err_to_name(err));
+        schedule_reconnect();
+    }
+}
+
+static void schedule_reconnect(void)
+{
+    if (s_reconnect_timer == NULL) {
+        const esp_timer_create_args_t args = {
+            .callback = reconnect_timer_cb,
+            .name = "wifi_reconnect",
+        };
+        if (esp_timer_create(&args, &s_reconnect_timer) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to create reconnect timer");
+            return;
+        }
+    }
+
+    esp_timer_stop(s_reconnect_timer);
+
+    ESP_LOGI(TAG, "Scheduling Wi-Fi reconnect in %lu ms", (unsigned long) s_reconnect_delay_ms);
+    if (esp_timer_start_once(s_reconnect_timer, (uint64_t) s_reconnect_delay_ms * 1000ULL) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start reconnect timer");
+        return;
+    }
+
+    uint32_t next = s_reconnect_delay_ms * 2;
+    if (next > RECONNECT_DELAY_MAX_MS) {
+        next = RECONNECT_DELAY_MAX_MS;
+    }
+    s_reconnect_delay_ms = next;
+}
+
+static void reset_reconnect_backoff(void)
+{
+    s_reconnect_delay_ms = RECONNECT_DELAY_MIN_MS;
+}
+
 // Function to scan for available WiFi networks
 esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count)
 {
@@ -81,6 +267,7 @@ esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count)
     }
 
     ESP_LOGI(TAG, "Starting Wi-Fi scan!");
+    s_scan_mode = WIFI_SCAN_MODE_USER;
     is_scanning = true;
 
     wifi_ap_record_t current_ap_info;
@@ -94,20 +281,27 @@ esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count)
         .ssid = 0,
         .bssid = 0,
         .channel = 0,
-        .show_hidden = false
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active = {
+            .min = 100,
+            .max = 300,
+        },
     };
 
     esp_err_t err = esp_wifi_scan_start(&scan_config, false);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Wi-Fi scan start failed with error: %s", esp_err_to_name(err));
+        s_scan_mode = WIFI_SCAN_MODE_NONE;
         is_scanning = false;
         return err;
     }
 
-    uint16_t retries_remaining = 10;
+    uint16_t retries_remaining = 15;
     while (is_scanning) {
         retries_remaining--;
         if (retries_remaining == 0) {
+            s_scan_mode = WIFI_SCAN_MODE_NONE;
             is_scanning = false;
             return ESP_FAIL;
         }
@@ -141,12 +335,35 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
     if (event_base == WIFI_EVENT)
     {
         if (event_id == WIFI_EVENT_SCAN_DONE) {
+            uint16_t fetched_ap_count = MAX_AP_COUNT;
+            wifi_scan_mode_t completed_scan_mode = s_scan_mode;
+
             esp_wifi_scan_get_ap_num(&ap_number);
             ESP_LOGI(TAG, "Wi-Fi Scan Done");
-            if (esp_wifi_scan_get_ap_records(&ap_number, ap_info) != ESP_OK) {
+
+            if (ap_number > MAX_AP_COUNT) {
+                ESP_LOGW(TAG, "Found %u APs, truncating scan results to %u", ap_number, MAX_AP_COUNT);
+            }
+
+            if (ap_number < fetched_ap_count) {
+                fetched_ap_count = ap_number;
+            }
+
+            if (esp_wifi_scan_get_ap_records(&fetched_ap_count, ap_info) != ESP_OK) {
                 ESP_LOGI(TAG, "Failed esp_wifi_scan_get_ap_records");
             }
+
+            ap_number = fetched_ap_count;
+            s_scan_mode = WIFI_SCAN_MODE_NONE;
             is_scanning = false;
+
+            if (completed_scan_mode == WIFI_SCAN_MODE_CONNECT) {
+                esp_err_t err = wifi_connect_best_ap_from_scan_results();
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to connect using strongest AP selection: %s", esp_err_to_name(err));
+                }
+                return;
+            }
         }
 
         if (is_scanning) {
@@ -155,7 +372,14 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
         }
 
         if (event_id == WIFI_EVENT_STA_START) {
-            esp_wifi_connect();
+            esp_err_t err = wifi_connect_best_ap();
+            if (err != ESP_OK) {
+                ESP_LOGW(TAG, "Strongest-AP connect unavailable, using fallback connect");
+                err = wifi_connect_with_fallback();
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "Fallback Wi-Fi connect failed: %s", esp_err_to_name(err));
+                }
+            }
             MINER_set_wifi_status(WIFI_CONNECTING, 0, 0);
         } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
             wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*) event_data;
@@ -166,12 +390,11 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
 
             ESP_LOGI(TAG, "Could not connect to '%s' [rssi %d]: reason %d", event->ssid, event->rssi, event->reason);
 
-            // Wait a little
-            esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "Retrying Wi-Fi connection...");
             MINER_set_wifi_status(WIFI_RETRYING, s_retry_num, event->reason);
-            vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+            schedule_reconnect();
         }
     }
 
@@ -181,6 +404,15 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
 
         ESP_LOGI(TAG, "Nano ip: %s", _ip_addr_str);
         s_retry_num = 0;
+        reset_reconnect_backoff();
+
+        // Clear bssid_set so the WiFi driver can BTM/RM-roam during this session.
+        // The next manual reconnect path will re-pick the best AP via scan.
+        esp_err_t cfg_err = set_sta_config_for_target(NULL, 0);
+        if (cfg_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to clear bssid lock after GOT_IP: %s", esp_err_to_name(cfg_err));
+        }
+
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         MINER_set_wifi_status(WIFI_CONNECTED, 0, 0);
     }
@@ -264,33 +496,13 @@ esp_netif_t * wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
         authmode = WIFI_AUTH_WPA2_PSK;
     }
 
-    wifi_config_t wifi_sta_config = {
-        .sta =
-            {
-                .threshold.authmode = authmode,
-                .btm_enabled = 1,
-                .rm_enabled = 1,
-                .scan_method = WIFI_ALL_CHANNEL_SCAN,
-                .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
-                .pmf_cfg =
-                    {
-                        .capable = true,
-                        .required = false
-                    },
-        },
-    };
+    s_target_authmode = authmode;
+    strncpy(s_target_ssid, wifi_ssid, sizeof(s_target_ssid));
+    s_target_ssid[sizeof(s_target_ssid) - 1] = '\0';
+    strncpy(s_target_pass, wifi_pass, sizeof(s_target_pass));
+    s_target_pass[sizeof(s_target_pass) - 1] = '\0';
 
-    strncpy((char *) wifi_sta_config.sta.ssid, wifi_ssid, sizeof(wifi_sta_config.sta.ssid));
-    wifi_sta_config.sta.ssid[sizeof(wifi_sta_config.sta.ssid) - 1] = '\0';
-
-    if (authmode != WIFI_AUTH_OPEN) {
-        strncpy((char *) wifi_sta_config.sta.password, wifi_pass, sizeof(wifi_sta_config.sta.password));
-        wifi_sta_config.sta.password[sizeof(wifi_sta_config.sta.password) - 1] = '\0';
-    }
-    // strncpy((char *) wifi_sta_config.sta.password, wifi_pass, 63);
-    // wifi_sta_config.sta.password[63] = '\0';
-
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config));
+    ESP_ERROR_CHECK(set_sta_config_for_target(NULL, 0));
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 
