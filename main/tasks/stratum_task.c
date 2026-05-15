@@ -464,6 +464,13 @@ void stratum_task(void * pvParameters)
         }
 #endif
 
+        // The next uid that will be issued belongs to a share submission.
+        // Used by the dispatcher below to distinguish setup-message replies
+        // from share replies without relying on a hardcoded id threshold.
+        taskENTER_CRITICAL(&GLOBAL_STATE->stratum_mux);
+        int first_share_uid = GLOBAL_STATE->send_uid;
+        taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
+
         // Everything is set up, lets make sure we don't abandon work unnecessarily.
         GLOBAL_STATE->abandon_work = 0;
 
@@ -525,20 +532,23 @@ void stratum_task(void * pvParameters)
                 stratum_close_connection(GLOBAL_STATE);
                 break;
             } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
-                if (stratum_api_v1_message.response_success) {
-                    ESP_LOGI(TAG, "message result accepted");
-                    SYSTEM_notify_accepted_share(GLOBAL_STATE);
+                bool is_setup = stratum_api_v1_message.message_id < first_share_uid;
+                if (is_setup) {
+                    // Reset retry attempts after successfully receiving setup data.
+                    retry_attempts = 0;
+                    if (stratum_api_v1_message.response_success) {
+                        ESP_LOGI(TAG, "setup message accepted");
+                    } else {
+                        ESP_LOGE(TAG, "setup message rejected: %s", stratum_api_v1_message.error_str);
+                    }
                 } else {
-                    ESP_LOGW(TAG, "message result rejected: %s", stratum_api_v1_message.error_str);
-                    SYSTEM_notify_rejected_share(GLOBAL_STATE, stratum_api_v1_message.error_str);
-                }
-            } else if (stratum_api_v1_message.method == STRATUM_RESULT_SETUP) {
-                // Reset retry attempts after successfully receiving data.
-                retry_attempts = 0;
-                if (stratum_api_v1_message.response_success) {
-                    ESP_LOGI(TAG, "setup message accepted");
-                } else {
-                    ESP_LOGE(TAG, "setup message rejected: %s", stratum_api_v1_message.error_str);
+                    if (stratum_api_v1_message.response_success) {
+                        ESP_LOGI(TAG, "message result accepted");
+                        SYSTEM_notify_accepted_share(GLOBAL_STATE);
+                    } else {
+                        ESP_LOGW(TAG, "message result rejected: %s", stratum_api_v1_message.error_str);
+                        SYSTEM_notify_rejected_share(GLOBAL_STATE, stratum_api_v1_message.error_str);
+                    }
                 }
             }
 

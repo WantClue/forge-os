@@ -268,11 +268,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         } else if (error_json != NULL && !cJSON_IsNull(error_json)) {
             message->response_success = false;
             message->error_str = strdup("unknown");
-            if (parsed_id < 5) {
-                result = STRATUM_RESULT_SETUP;
-            } else {
-                result = STRATUM_RESULT;
-            }
+            result = STRATUM_RESULT;
             if (cJSON_IsArray(error_json)) {
                 int len = cJSON_GetArraySize(error_json);
                 if (len >= 2) {
@@ -288,11 +284,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             }
 
         } else if (cJSON_IsBool(result_json)) {
-            if (parsed_id < 5) {
-                result = STRATUM_RESULT_SETUP;
-            } else {
-                result = STRATUM_RESULT;
-            }
+            result = STRATUM_RESULT;
             if (cJSON_IsTrue(result_json)) {
                 message->response_success = true;
             } else {
