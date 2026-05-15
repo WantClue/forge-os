@@ -69,7 +69,7 @@
 #define REFERENCE_VOLTAGE_0V8_MAX 950  //mV
 
 //Test Power Consumption
-#define POWER_CONSUMPTION_NANO 30     //watts
+#define POWER_CONSUMPTION_NANO 37     //watts
 #define POWER_CONSUMPTION_MARGIN 10    //+/- watts
 
 static const char * TAG = "self_test";
@@ -341,6 +341,8 @@ void execute_production_test(void * pvParameters)
         ESP_LOGE(TAG, "Peripherals init failed!");
         tests_done(GLOBAL_STATE, TESTS_FAILED, PERIPHERAL_FAILURE);
     }
+
+    Thermal_setFanSpeedPercent(1.0f);
 
     switch (GLOBAL_STATE->device_model) {
         case BITFORGE_NANO:
