@@ -31,6 +31,7 @@ export class SystemService {
           hashRate: 2475,
           bestDiff: 666000000000,
           bestSessionDiff: "33M",
+          stratumDiff: 8192,
           freeHeap: 200504,
           freeHeapInternal: 150000,
           freeHeapSpiram: 50504,

@@ -284,6 +284,10 @@
                             <span class="info-value">{{info.fallbackStratumUser | truncateMiddle:10:8}}</span>
                         </div>
                     </ng-container>
+                    <div class="info-item">
+                        <span class="info-label">Difficulty</span>
+                        <span class="info-value">{{info.stratumDiff > 0 ? info.stratumDiff : '—'}}</span>
+                    </div>
                 </div>
             </div>
         </div>

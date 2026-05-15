@@ -17,6 +17,7 @@ export interface ISystemInfo {
     hashRate: number,
     bestDiff: number,
     bestSessionDiff: string,
+    stratumDiff: number,
     freeHeap: number,
     freeHeapInternal: number,
     freeHeapSpiram: number,
