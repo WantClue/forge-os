@@ -232,19 +232,36 @@ void cleanQueue(GlobalState * GLOBAL_STATE) {
     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
 }
 
+int stratum_get_next_uid(GlobalState * GLOBAL_STATE)
+{
+    taskENTER_CRITICAL(&GLOBAL_STATE->stratum_mux);
+    int uid = GLOBAL_STATE->send_uid++;
+    taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
+    return uid;
+}
+
 void stratum_reset_uid(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGI(TAG, "Resetting stratum uid");
+    taskENTER_CRITICAL(&GLOBAL_STATE->stratum_mux);
     GLOBAL_STATE->send_uid = 1;
+    taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
 }
 
 void stratum_close_connection(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGE(TAG, "Shutting down socket and restarting...");
-    if (GLOBAL_STATE->transport != NULL) {
-        esp_transport_close(GLOBAL_STATE->transport);
-        esp_transport_destroy(GLOBAL_STATE->transport);
-        GLOBAL_STATE->transport = NULL;
+
+    // Atomically take ownership of the transport handle so concurrent
+    // share submits in asic_result_task can't write into a destroyed transport.
+    taskENTER_CRITICAL(&GLOBAL_STATE->stratum_mux);
+    esp_transport_handle_t transport = GLOBAL_STATE->transport;
+    GLOBAL_STATE->transport = NULL;
+    taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
+
+    if (transport != NULL) {
+        esp_transport_close(transport);
+        esp_transport_destroy(transport);
     }
     cleanQueue(GLOBAL_STATE);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -429,21 +446,21 @@ void stratum_task(void * pvParameters)
 
         ///// Start Stratum Action
         // mining.configure - ID: 1
-        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, &GLOBAL_STATE->version_mask);
+        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), &GLOBAL_STATE->version_mask);
 
         // mining.subscribe - ID: 2
-        STRATUM_V1_subscribe(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, GLOBAL_STATE->asic_model_str);
+        STRATUM_V1_subscribe(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), GLOBAL_STATE->asic_model_str);
 
         char * username = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
         char * password = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_pass : GLOBAL_STATE->SYSTEM_MODULE.pool_pass;
 
         //mining.authorize - ID: 3
-        STRATUM_V1_authorize(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, username, password);
+        STRATUM_V1_authorize(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), username, password);
 
 #ifdef CONFIG_STRATUM_SUGGEST_DIFFICULTY
         if (STRATUM_DIFFICULTY > 0) {
             // mining.suggest_difficulty - optional; some pools reject this method.
-            STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, STRATUM_DIFFICULTY);
+            STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), STRATUM_DIFFICULTY);
         }
 #endif
 
@@ -524,12 +541,11 @@ void stratum_task(void * pvParameters)
                     ESP_LOGE(TAG, "setup message rejected: %s", stratum_api_v1_message.error_str);
                 }
             }
+
+            STRATUM_V1_reset_message(&stratum_api_v1_message);
         }
 
-        if (stratum_api_v1_message.error_str) {
-            free(stratum_api_v1_message.error_str);
-            stratum_api_v1_message.error_str = NULL;
-        }
+        STRATUM_V1_reset_message(&stratum_api_v1_message);
     }
     vTaskDelete(NULL);
 }

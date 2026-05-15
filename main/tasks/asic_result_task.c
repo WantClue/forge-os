@@ -65,21 +65,35 @@ void ASIC_result_task(void *pvParameters)
         if (nonce_diff >= GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff)
         {
             char * user = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
-            int ret = STRATUM_V1_submit_share(
-                GLOBAL_STATE->transport,
-                GLOBAL_STATE->send_uid++,
-                user,
-                GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->jobid,
-                GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->extranonce2,
-                GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->ntime,
-                asic_result->nonce,
-                asic_result->rolled_version ^ GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->version);
 
-            pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+            // Snapshot transport + uid atomically so stratum_close_connection can't
+            // destroy the transport between the read here and the write below.
+            taskENTER_CRITICAL(&GLOBAL_STATE->stratum_mux);
+            esp_transport_handle_t transport = GLOBAL_STATE->transport;
+            int uid = GLOBAL_STATE->send_uid++;
+            taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
 
-            if (ret < 0) {
-                ESP_LOGI(TAG, "Unable to write share to socket. Closing connection. Ret: %d (errno %d: %s)", ret, errno, strerror(errno));
-                stratum_close_connection(GLOBAL_STATE);
+            int ret = 0;
+            if (transport == NULL) {
+                ESP_LOGW(TAG, "No transport available, dropping share");
+                pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+            } else {
+                ret = STRATUM_V1_submit_share(
+                    transport,
+                    uid,
+                    user,
+                    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->jobid,
+                    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->extranonce2,
+                    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->ntime,
+                    asic_result->nonce,
+                    asic_result->rolled_version ^ GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->version);
+
+                pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+
+                if (ret < 0) {
+                    ESP_LOGI(TAG, "Unable to write share to socket. Closing connection. Ret: %d (errno %d: %s)", ret, errno, strerror(errno));
+                    stratum_close_connection(GLOBAL_STATE);
+                }
             }
         } else {
             pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);

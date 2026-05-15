@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "freertos/FreeRTOS.h"
 #include "asic_task.h"
 #include "bm1370.h"
 #include "common.h"
@@ -137,6 +138,10 @@ typedef struct
     // A message ID that must be unique per request that expects a response.
     // For requests not expecting a response (called notifications), this is null.
     int send_uid;
+
+    // Guards send_uid and the transport pointer against the stratum/asic_result
+    // tasks racing on share submit vs. connection teardown.
+    portMUX_TYPE stratum_mux;
 
     bool ASIC_initalized;
     bool psram_is_available;

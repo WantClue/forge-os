@@ -141,7 +141,6 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
     char *line = NULL;
     char recv_buffer[BUFFER_SIZE];
     int nbytes;
-    int timeout_count = 0;
 
     while (!strstr(json_rpc_buffer, "\n")) {
         memset(recv_buffer, 0, BUFFER_SIZE);
@@ -170,17 +169,12 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
             return NULL;
         }
         if (nbytes == 0) {
-            timeout_count++;
-            if (timeout_count >= 10) {
-                ESP_LOGW(TAG, "Transport read timed out %d times, giving up", timeout_count);
-                free(json_rpc_buffer);
-                json_rpc_buffer = NULL;
-                json_rpc_buffer_size = 0;
-                return NULL;
-            }
+            // App-level read timeout. The pool may simply be quiet between
+            // notifies; TCP keepalive (configured in set_socket_options) will
+            // drop the socket if the peer is actually dead, surfacing here as
+            // nbytes < 0. Keep waiting.
             continue;
         }
-        timeout_count = 0;
         realloc_json_buffer(nbytes);
         strncat(json_rpc_buffer, recv_buffer, nbytes);
     }
@@ -202,12 +196,34 @@ char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
     return line;
 }
 
-void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
+void STRATUM_V1_reset_message(StratumApiV1Message * message)
 {
     if (message->error_str) {
         free(message->error_str);
         message->error_str = NULL;
     }
+    if (message->extranonce_str) {
+        free(message->extranonce_str);
+        message->extranonce_str = NULL;
+    }
+    if (message->mining_notification) {
+        // Caller normally takes ownership by NULLing this slot after enqueue.
+        // If it's still set when we get here, the notify never made it to the
+        // queue and we must free it to avoid a leak.
+        STRATUM_V1_free_mining_notify(message->mining_notification);
+        message->mining_notification = NULL;
+    }
+    message->method = STRATUM_UNKNOWN;
+    message->message_id = -1;
+    message->response_success = false;
+    message->new_difficulty = 0;
+    message->version_mask = 0;
+    message->extranonce_2_len = 0;
+}
+
+void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
+{
+    STRATUM_V1_reset_message(message);
 
     ESP_LOGI(TAG, "rx: %s", stratum_json);
 
