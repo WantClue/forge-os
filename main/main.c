@@ -33,24 +33,50 @@ static GlobalState GLOBAL_STATE = {
 
 static const char * TAG = "bitforge";
 
+#define AP_GRACE_PERIOD_MS (7 * 60 * 1000)
+#define AP_DISABLE_RETRY_MS 5000
+#define AP_DISABLE_MAX_ATTEMPTS 3
+#define AP_TIMEOUT_TASK_STACK_SIZE 8192
+
 static void ap_timeout_task(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
-    
-    // Wait 7 minutes (420 seconds)
-    vTaskDelay(pdMS_TO_TICKS(420000));
-    
+
+    ESP_LOGI(TAG, "Setup AP timeout armed; task stack free: %u bytes",
+             (unsigned int) uxTaskGetStackHighWaterMark(NULL));
+
+    // Keep the setup AP available briefly after each boot.
+    vTaskDelay(pdMS_TO_TICKS(AP_GRACE_PERIOD_MS));
+
     // Check if WiFi is still connected
     bool wifi_connected = (strlen(GLOBAL_STATE->SYSTEM_MODULE.ip_addr_str) > 0 &&
                           strcmp(GLOBAL_STATE->SYSTEM_MODULE.ip_addr_str, "0.0.0.0") != 0);
-    
+
     if (wifi_connected && GLOBAL_STATE->SYSTEM_MODULE.ap_enabled) {
-        ESP_LOGI(TAG, "7 minutes elapsed and WiFi connected - turning off AP to save resources");
-        wifi_softap_off();
+        ESP_LOGI(TAG, "7 minutes elapsed and WiFi connected - turning off setup AP; "
+                      "task stack minimum free: %u bytes",
+                 (unsigned int) uxTaskGetStackHighWaterMark(NULL));
+
+        for (int attempt = 1; attempt <= AP_DISABLE_MAX_ATTEMPTS; attempt++) {
+            esp_err_t err = wifi_softap_off();
+            if (err == ESP_OK) {
+                ESP_LOGI(TAG, "Setup AP disabled; station WiFi remains active");
+                break;
+            }
+
+            ESP_LOGW(TAG, "Unable to disable setup AP (attempt %d/%d): %s",
+                     attempt, AP_DISABLE_MAX_ATTEMPTS, esp_err_to_name(err));
+
+            if (attempt < AP_DISABLE_MAX_ATTEMPTS) {
+                vTaskDelay(pdMS_TO_TICKS(AP_DISABLE_RETRY_MS));
+            } else {
+                ESP_LOGW(TAG, "Setup AP remains active; mining will continue");
+            }
+        }
     } else {
-        ESP_LOGI(TAG, "7 minutes elapsed but WiFi not connected - keeping AP active");
+        ESP_LOGI(TAG, "7 minutes elapsed but WiFi not connected - keeping setup AP active");
     }
-    
+
     // Task done, delete itself
     vTaskDelete(NULL);
 }
@@ -157,8 +183,9 @@ void app_main(void)
     // wifi_softap_off();  // Commented out to maintain AP access
     ESP_LOGI(TAG, "AP remains active for dual-mode operation");
 
-    // Create task to turn off AP after 7 minutes if WiFi is connected
-    xTaskCreate(&ap_timeout_task, "ap_timeout", 2048, (void *) &GLOBAL_STATE, 1, NULL);
+    // Create task to turn off the setup AP after 7 minutes if WiFi is connected.
+    xTaskCreate(&ap_timeout_task, "ap_timeout", AP_TIMEOUT_TASK_STACK_SIZE,
+                (void *) &GLOBAL_STATE, 1, NULL);
 
     queue_init(&GLOBAL_STATE.stratum_queue);
     queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
