@@ -96,6 +96,10 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
     ESP_LOGI(TAG, "Initial overheat_mode value: %d", module->overheat_mode);
 
+    // Pause is intentionally not persisted: every clean boot starts mining.
+    module->mining_paused = false;
+    module->mining_state = MINING_STATE_MINING;
+
     //Initialize power_fault fault mode
     module->power_fault = 0;
 

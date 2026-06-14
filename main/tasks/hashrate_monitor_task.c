@@ -54,6 +54,28 @@ static void clear_measurements(HashrateMonitorModule * HASHRATE_MONITOR_MODULE, 
     memset(HASHRATE_MONITOR_MODULE->error_measurement, 0, asic_count * sizeof(measurement_t));
 }
 
+void hashrate_monitor_reset(void *pvParameters)
+{
+    GlobalState * GLOBAL_STATE = (GlobalState *)pvParameters;
+    HashrateMonitorModule * HASHRATE_MONITOR_MODULE = &GLOBAL_STATE->HASHRATE_MONITOR_MODULE;
+
+    if (!HASHRATE_MONITOR_MODULE->is_initialized) {
+        HASHRATE_MONITOR_MODULE->hashrate = 0.0f;
+        HASHRATE_MONITOR_MODULE->error_count = 0;
+        return;
+    }
+
+    int asic_count = ASIC_get_asic_count(GLOBAL_STATE);
+
+    pthread_mutex_lock(&HASHRATE_MONITOR_MODULE->measurement_lock);
+    clear_measurements(HASHRATE_MONITOR_MODULE, asic_count, BM1370_HASH_DOMAINS);
+    HASHRATE_MONITOR_MODULE->hashrate = 0.0f;
+    HASHRATE_MONITOR_MODULE->error_count = 0;
+    pthread_mutex_unlock(&HASHRATE_MONITOR_MODULE->measurement_lock);
+
+    ESP_LOGI(TAG, "Hashrate estimator reset");
+}
+
 float hash_counter_to_ghs(uint32_t duration_ms, uint32_t counter)
 {
     if (duration_ms == 0) return 0.0f;
@@ -158,6 +180,12 @@ void hashrate_monitor_task(void *pvParameters)
 
     TickType_t taskWakeTime = xTaskGetTickCount();
     while (1) {
+        if (!GLOBAL_STATE->ASIC_initalized) {
+            taskWakeTime = xTaskGetTickCount();
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            continue;
+        }
+
         BM1370_read_registers();
         ESP_LOGD(TAG, "Sent register read commands");
 
@@ -166,9 +194,6 @@ void hashrate_monitor_task(void *pvParameters)
         pthread_mutex_lock(&HASHRATE_MONITOR_MODULE->measurement_lock);
         float hashrate = sum_hashrates(HASHRATE_MONITOR_MODULE->total_measurement, asic_count);
         uint32_t error_count = sum_values(HASHRATE_MONITOR_MODULE->error_measurement, asic_count);
-        pthread_mutex_unlock(&HASHRATE_MONITOR_MODULE->measurement_lock);
-
-        ESP_LOGI(TAG, "Calculated hashrate: %.2f GH/s", hashrate);
 
         if (hashrate == 0.0) {
             HASHRATE_MONITOR_MODULE->hashrate = 0.0;
@@ -176,14 +201,17 @@ void hashrate_monitor_task(void *pvParameters)
             if (HASHRATE_MONITOR_MODULE->hashrate == 0.0f) {
                 // Initialize with current hashrate
                 HASHRATE_MONITOR_MODULE->hashrate = hashrate;
-                ESP_LOGI(TAG, "Initial hashrate set to %.2f GH/s", hashrate);
             } else {
                 HASHRATE_MONITOR_MODULE->hashrate = ((HASHRATE_MONITOR_MODULE->hashrate * (EMA_ALPHA - 1)) + hashrate) / EMA_ALPHA;
-                ESP_LOGI(TAG, "EMA hashrate: %.2f GH/s", HASHRATE_MONITOR_MODULE->hashrate);
             }
         }
 
         HASHRATE_MONITOR_MODULE->error_count = error_count;
+        float filtered_hashrate = HASHRATE_MONITOR_MODULE->hashrate;
+        pthread_mutex_unlock(&HASHRATE_MONITOR_MODULE->measurement_lock);
+
+        ESP_LOGI(TAG, "Calculated hashrate: %.2f GH/s", hashrate);
+        ESP_LOGI(TAG, "Reported hashrate: %.2f GH/s", filtered_hashrate);
 
         vTaskDelayUntil(&taskWakeTime, POLL_RATE / portTICK_PERIOD_MS);
     }
@@ -199,6 +227,10 @@ void hashrate_monitor_register_read(void *pvParameters, register_type_t register
 
     int asic_count = ASIC_get_asic_count(GLOBAL_STATE);
     int hash_domains = BM1370_HASH_DOMAINS;
+
+    if (!GLOBAL_STATE->ASIC_initalized || !HASHRATE_MONITOR_MODULE->is_initialized) {
+        return;
+    }
 
     ESP_LOGD(TAG, "Register read: type=%d, asic=%d, value=0x%08"PRIX32, register_type, asic_nr, value);
 

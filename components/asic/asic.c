@@ -19,6 +19,16 @@ uint8_t ASIC_init(GlobalState * GLOBAL_STATE) {
     return ESP_OK;
 }
 
+void ASIC_hold_reset_low(GlobalState * GLOBAL_STATE) {
+    switch (GLOBAL_STATE->device_model) {
+        case BITFORGE_NANO:
+            BM1370_hold_reset_low();
+            break;
+        default:
+            break;
+    }
+}
+
 uint8_t ASIC_get_asic_count(GlobalState * GLOBAL_STATE) {
     switch (GLOBAL_STATE->device_model) {
         case BITFORGE_NANO:

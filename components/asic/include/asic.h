@@ -8,6 +8,7 @@
 #define BITFORGE_NANO_ASIC_COUNT 2
 
 uint8_t ASIC_init(GlobalState * GLOBAL_STATE);
+void ASIC_hold_reset_low(GlobalState * GLOBAL_STATE);
 uint8_t ASIC_get_asic_count(GlobalState * GLOBAL_STATE);
 uint16_t ASIC_get_small_core_count(GlobalState * GLOBAL_STATE);
 task_result * ASIC_process_work(GlobalState * GLOBAL_STATE);

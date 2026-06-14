@@ -49,7 +49,9 @@ void create_jobs_task(void *pvParameters)
         }
 
         uint64_t extranonce_2 = 0;
-        while (queue_count(&GLOBAL_STATE->stratum_queue) < 1 && GLOBAL_STATE->abandon_work == 0)
+        while (queue_count(&GLOBAL_STATE->stratum_queue) < 1 &&
+               GLOBAL_STATE->abandon_work == 0 &&
+               !GLOBAL_STATE->SYSTEM_MODULE.mining_paused)
         {
             if (should_generate_more_work(GLOBAL_STATE))
             {

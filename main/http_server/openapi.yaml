@@ -99,6 +99,8 @@ components:
         - isPSRAMAvailable
         - isUsingFallbackStratum
         - macAddr
+        - miningPaused
+        - miningState
         - overheat_mode
         - power
         - runningPartition
@@ -146,7 +148,7 @@ components:
           description: Actual measured ASIC core voltage
         current:
           type: number
-          description: Current draw in milliamps
+          description: Live board input current in milliamps, including while mining is paused
         fallbackStratumPort:
           type: number
           description: Fallback stratum server port
@@ -158,7 +160,7 @@ components:
           description: Fallback stratum username
         fanrpm:
           type: number
-          description: Current fan speed in RPM
+          description: Current fan speed in RPM, including while mining is paused
         fanSpeed:
           type: number
           description: Current fan speed percentage
@@ -195,12 +197,19 @@ components:
         macAddr:
           type: string
           description: Device MAC address
+        miningPaused:
+          type: boolean
+          description: Whether mining pause has been requested
+        miningState:
+          type: string
+          description: Current mining hardware transition state
+          enum: [mining, pausing, paused, resuming]
         overheat_mode:
           type: number
           description: Overheat protection mode
         power:
           type: number
-          description: Power consumption in watts
+          description: Live board input power in watts, including controller and fans while mining is paused
         runningPartition:
           type: string
           description: Currently active OTA partition
@@ -230,7 +239,7 @@ components:
           description: Primary stratum username
         temp:
           type: number
-          description: Average chip temperature
+          description: Average ASIC temperature, or 0 while ASIC thermal diodes are unavailable during pause
         uptimeSeconds:
           type: number
           description: System uptime in seconds
@@ -239,7 +248,7 @@ components:
           description: Firmware version
         voltage:
           type: number
-          description: Input voltage
+          description: Live board input voltage in millivolts, including while mining is paused
         vrTemp:
           type: number
           description: Voltage regulator temperature
@@ -376,6 +385,48 @@ components:
       description: Internal server error
 
 paths:
+  /api/system/pause:
+    post:
+      summary: Pause mining while keeping the controller online
+      responses:
+        "200":
+          description: Pause request accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, miningPaused, miningState]
+                properties:
+                  message:
+                    type: string
+                  miningPaused:
+                    type: boolean
+                  miningState:
+                    type: string
+                    enum: [mining, pausing, paused, resuming]
+        "503":
+          description: Mining subsystem is not ready
+  /api/system/resume:
+    post:
+      summary: Resume mining and reinitialize the ASIC chain
+      responses:
+        "200":
+          description: Resume request accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, miningPaused, miningState]
+                properties:
+                  message:
+                    type: string
+                  miningPaused:
+                    type: boolean
+                  miningState:
+                    type: string
+                    enum: [mining, pausing, paused, resuming]
+        "503":
+          description: Mining subsystem is not ready
   /api/system/wifi/scan:
     get:
       summary: Scan for available WiFi networks
