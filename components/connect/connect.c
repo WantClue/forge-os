@@ -462,11 +462,17 @@ void toggle_wifi_softap(void)
     }
 }
 
-void wifi_softap_off(void)
+esp_err_t wifi_softap_off(void)
 {
     ESP_LOGI(TAG, "ESP_WIFI Access Point Off");
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    esp_err_t err = esp_wifi_set_mode(WIFI_MODE_STA);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to disable access point: %s", esp_err_to_name(err));
+        return err;
+    }
+
     MINER_set_ap_status(false);
+    return ESP_OK;
 }
 
 void wifi_softap_on(void)
