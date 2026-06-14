@@ -12,6 +12,8 @@ import type { ISystemInfo } from "src/models/ISystemInfo"
   styleUrls: ["./home.component.scss"],
 })
 export class HomeComponent {
+  public readonly dualPoolMode = 1
+
   public info$!: Observable<ISystemInfo>
   public quickLink$!: Observable<string | undefined>
   public fallbackQuickLink$!: Observable<string | undefined>
@@ -306,6 +308,14 @@ export class HomeComponent {
     })
 
     return this.calculateAverage(efficiencies)
+  }
+
+  public isDualPool(info: ISystemInfo): boolean {
+    return info.poolMode === this.dualPoolMode
+  }
+
+  public getPoolSharesAccepted(info: ISystemInfo, poolIndex: number): number {
+    return info.pools?.[poolIndex]?.accepted ?? 0
   }
 
 }
