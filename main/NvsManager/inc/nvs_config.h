@@ -20,6 +20,8 @@
 #define NVS_CONFIG_STRATUM_CERT "stratumcert"
 #define NVS_CONFIG_FALLBACK_STRATUM_TLS "fbstratumtls"
 #define NVS_CONFIG_FALLBACK_STRATUM_CERT "fbstratumcert"
+#define NVS_CONFIG_POOL_MODE "poolmode"
+#define NVS_CONFIG_POOL_BALANCE "poolbalance"
 #define NVS_CONFIG_ASIC_FREQ "asicfrequency"
 #define NVS_CONFIG_ASIC_VOLTAGE "asicvoltage"
 #define NVS_CONFIG_ASIC_MODEL "asicmodel"

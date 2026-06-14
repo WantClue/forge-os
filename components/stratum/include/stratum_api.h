@@ -4,6 +4,7 @@
 #include "cJSON.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <sys/time.h>
 #include <esp_transport.h>
 
@@ -78,11 +79,22 @@ typedef struct {
     bool tracking;
 } RequestTiming;
 
+typedef struct {
+    char *json_rpc_buffer;
+    size_t json_rpc_buffer_size;
+} StratumV1RxBuffer;
+
 esp_transport_handle_t STRATUM_V1_transport_init(tls_mode tls, char * cert);
 
 void STRATUM_V1_initialize_buffer();
 
+void STRATUM_V1_initialize_rx_buffer(StratumV1RxBuffer *rx);
+
+void STRATUM_V1_free_rx_buffer(StratumV1RxBuffer *rx);
+
 char *STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport);
+
+char *STRATUM_V1_receive_jsonrpc_line_ctx(esp_transport_handle_t transport, StratumV1RxBuffer *rx);
 
 int STRATUM_V1_subscribe(esp_transport_handle_t transport, int send_uid, const char * model);
 

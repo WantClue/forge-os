@@ -3,6 +3,25 @@
         <div class="card">
             <h5>Pool Configuration</h5>
             <form [formGroup]="form" *ngIf="form != null">
+                <div class="field grid p-fluid">
+                    <label htmlFor="poolMode" class="col-12 mb-2 md:col-2 md:mb-0">Pool Mode:</label>
+                    <div class="col-12 md:col-10">
+                        <p-dropdown id="poolMode" [options]="poolModes" formControlName="poolMode"
+                                    optionLabel="label" optionValue="value" placeholder="Select Pool Mode">
+                        </p-dropdown>
+                    </div>
+                </div>
+
+                <div class="field grid p-fluid" *ngIf="form.get('poolMode')?.value === 1">
+                    <label htmlFor="poolBalance" class="col-12 mb-2 md:col-2 md:mb-0">Pool Balance:</label>
+                    <div class="col-12 md:col-10">
+                        <input pInputText id="poolBalance" formControlName="poolBalance" type="number" min="0" max="100" />
+                        <div>
+                            <small>Primary {{ form.get('poolBalance')?.value }}% / Secondary {{ 100 - form.get('poolBalance')?.value }}%</small>
+                        </div>
+                    </div>
+                </div>
+
                 <p-tabView>
                     <p-tabPanel header="Main Pool" leftIcon="pi pi-server">
                         <div class="field grid p-fluid">
@@ -55,7 +74,7 @@
                         </div>
                     </p-tabPanel>
 
-                    <p-tabPanel header="Fallback Pool" leftIcon="pi pi-shield">
+                    <p-tabPanel header="Secondary / Fallback Pool" leftIcon="pi pi-shield">
                         <div class="field grid p-fluid">
                             <label htmlFor="fallbackStratumURL" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Host:</label>
                             <div class="col-12 md:col-10">

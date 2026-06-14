@@ -47,6 +47,8 @@ export class SystemService {
           sharesAccepted: 1,
           sharesRejected: 0,
           sharesRejectedReasons: [],
+          poolMode: 0,
+          poolBalance: 50,
           uptimeSeconds: 38,
           asicCount: 1,
           smallCoreCount: 672,

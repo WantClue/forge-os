@@ -31,6 +31,8 @@ export interface ISystemInfo {
     sharesAccepted: number,
     sharesRejected: number,
     sharesRejectedReasons: ISharesRejectedStat[];
+    poolMode: number,
+    poolBalance: number,
     uptimeSeconds: number,
     asicCount: number,
     smallCoreCount: number,

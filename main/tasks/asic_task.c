@@ -43,6 +43,13 @@ void ASIC_task(void *pvParameters)
             GLOBAL_STATE->stratum_difficulty = next_bm_job->pool_diff;
         }
 
+        if (next_bm_job->version_mask != GLOBAL_STATE->version_mask)
+        {
+            ESP_LOGI(TAG, "Set chip version rolls %i", (int)(next_bm_job->version_mask >> 13));
+            ASIC_set_version_mask(GLOBAL_STATE, next_bm_job->version_mask);
+            GLOBAL_STATE->version_mask = next_bm_job->version_mask;
+        }
+
         //(*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, next_bm_job); // send the job to the ASIC
         ASIC_send_work(GLOBAL_STATE, next_bm_job);
 

@@ -21,6 +21,7 @@ typedef struct
 void queue_init(work_queue *queue);
 void queue_enqueue(work_queue *queue, void *new_work);
 void ASIC_jobs_queue_clear(work_queue *queue);
+void ASIC_jobs_queue_clear_pool(work_queue *queue, int pool_id);
 void *queue_dequeue(work_queue *queue);
 bool queue_dequeue_if_full(work_queue *queue, void **work);
 int queue_count(work_queue *queue);
