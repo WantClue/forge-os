@@ -96,6 +96,9 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     // set fallback to false.
     module->is_using_fallback = false;
     module->pool_mode = nvs_config_get_u16(NVS_CONFIG_POOL_MODE, POOL_MODE_FALLBACK);
+    if (module->pool_mode > POOL_MODE_DUAL) {
+        module->pool_mode = POOL_MODE_FALLBACK;
+    }
     module->pool_balance = nvs_config_get_u16(NVS_CONFIG_POOL_BALANCE, 50);
     if (module->pool_balance > 100) {
         module->pool_balance = 50;
