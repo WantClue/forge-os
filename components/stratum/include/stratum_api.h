@@ -86,9 +86,9 @@ typedef struct {
 
 esp_transport_handle_t STRATUM_V1_transport_init(tls_mode tls, char * cert);
 
-void STRATUM_V1_initialize_buffer();
+bool STRATUM_V1_initialize_buffer();
 
-void STRATUM_V1_initialize_rx_buffer(StratumV1RxBuffer *rx);
+bool STRATUM_V1_initialize_rx_buffer(StratumV1RxBuffer *rx);
 
 void STRATUM_V1_free_rx_buffer(StratumV1RxBuffer *rx);
 

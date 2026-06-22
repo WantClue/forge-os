@@ -85,14 +85,18 @@ esp_transport_handle_t STRATUM_V1_transport_init(tls_mode tls, char * cert)
     return transport;
 }
 
-void STRATUM_V1_initialize_buffer()
+bool STRATUM_V1_initialize_buffer()
 {
-    STRATUM_V1_initialize_rx_buffer(&default_rx_buffer);
+    if (!STRATUM_V1_initialize_rx_buffer(&default_rx_buffer)) {
+        return false;
+    }
 
     for (int i = 0; i < MAX_REQUEST_IDS; i++) {
         request_timings[i].timestamp_us = 0;
         request_timings[i].tracking = false;
     }
+
+    return true;
 }
 
 void cleanup_stratum_buffer()
@@ -100,18 +104,20 @@ void cleanup_stratum_buffer()
     STRATUM_V1_free_rx_buffer(&default_rx_buffer);
 }
 
-void STRATUM_V1_initialize_rx_buffer(StratumV1RxBuffer *rx)
+bool STRATUM_V1_initialize_rx_buffer(StratumV1RxBuffer *rx)
 {
     if (rx == NULL) {
-        return;
+        return false;
     }
     rx->json_rpc_buffer = malloc(BUFFER_SIZE);
     rx->json_rpc_buffer_size = BUFFER_SIZE;
     if (rx->json_rpc_buffer == NULL) {
         printf("Error: Failed to allocate memory for buffer\n");
-        exit(1);
+        rx->json_rpc_buffer_size = 0;
+        return false;
     }
     memset(rx->json_rpc_buffer, 0, BUFFER_SIZE);
+    return true;
 }
 
 void STRATUM_V1_free_rx_buffer(StratumV1RxBuffer *rx)
@@ -153,7 +159,9 @@ static void realloc_json_buffer(StratumV1RxBuffer *rx, size_t len)
 char * STRATUM_V1_receive_jsonrpc_line(esp_transport_handle_t transport)
 {
     if (default_rx_buffer.json_rpc_buffer == NULL) {
-        STRATUM_V1_initialize_buffer();
+        if (!STRATUM_V1_initialize_buffer()) {
+            return NULL;
+        }
     }
     return STRATUM_V1_receive_jsonrpc_line_ctx(transport, &default_rx_buffer);
 }
@@ -164,7 +172,9 @@ char * STRATUM_V1_receive_jsonrpc_line_ctx(esp_transport_handle_t transport, Str
         return NULL;
     }
     if (rx->json_rpc_buffer == NULL) {
-        STRATUM_V1_initialize_rx_buffer(rx);
+        if (!STRATUM_V1_initialize_rx_buffer(rx)) {
+            return NULL;
+        }
     }
     char *line = NULL;
     char recv_buffer[BUFFER_SIZE];
