@@ -77,6 +77,10 @@
             <div class="metric-content">
                 <div class="metric-value">{{info.sharesAccepted | number: '1.0-0'}}</div>
                 <div class="metric-details">
+                    <ng-container *ngIf="isDualPool(info)">
+                        <span class="metric-status success">Primary {{getPoolSharesAccepted(info, 0) | number: '1.0-0'}}</span>
+                        <span class="metric-status success">Secondary {{getPoolSharesAccepted(info, 1) | number: '1.0-0'}}</span>
+                    </ng-container>
                     <span *ngIf="info.sharesRejected === 0" class="metric-status success">0 rejected</span>
                     <div *ngIf="info.sharesRejected > 0">
                         <div *ngFor="let sharesRejectedReason of info.sharesRejectedReasons" class="metric-status error">

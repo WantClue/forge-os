@@ -5,6 +5,14 @@ interface ISharesRejectedStat {
     count: number;
 }
 
+interface IStratumPoolInfo {
+    connected: boolean;
+    validNotify: boolean;
+    difficulty: number;
+    accepted: number;
+    rejected: number;
+}
+
 export interface ISystemInfo {
 
     power: number,
@@ -31,6 +39,9 @@ export interface ISystemInfo {
     sharesAccepted: number,
     sharesRejected: number,
     sharesRejectedReasons: ISharesRejectedStat[];
+    poolMode: number,
+    poolBalance: number,
+    pools: IStratumPoolInfo[],
     uptimeSeconds: number,
     asicCount: number,
     smallCoreCount: number,

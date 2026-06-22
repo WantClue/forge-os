@@ -39,7 +39,6 @@
 
 static const char * TAG = "stratum_task";
 
-static StratumApiV1Message stratum_api_v1_message = {};
 static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192.0};
 
 static const char * primary_stratum_url;
@@ -57,6 +56,11 @@ struct timeval tcp_rcv_timeout = {
 
 static uint16_t primary_stratum_tls;
 static char * primary_stratum_cert;
+
+typedef struct {
+    GlobalState *state;
+    int pool_id;
+} stratum_pool_task_params_t;
 
 typedef struct {
     struct sockaddr_storage dest_addr;
@@ -194,6 +198,100 @@ static void set_socket_options(esp_transport_handle_t transport)
     }
 }
 
+static const char *pool_label(int pool_id)
+{
+    return pool_id == POOL_SECONDARY ? "secondary" : "primary";
+}
+
+static char *pool_url(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    return pool_id == POOL_SECONDARY ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_url : GLOBAL_STATE->SYSTEM_MODULE.pool_url;
+}
+
+static uint16_t pool_port(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    return pool_id == POOL_SECONDARY ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_port : GLOBAL_STATE->SYSTEM_MODULE.pool_port;
+}
+
+static tls_mode pool_tls(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    return pool_id == POOL_SECONDARY ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_tls : GLOBAL_STATE->SYSTEM_MODULE.pool_tls;
+}
+
+static char *pool_cert(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    return pool_id == POOL_SECONDARY ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_cert : GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
+}
+
+static char *pool_user(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    return pool_id == POOL_SECONDARY ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
+}
+
+static char *pool_pass(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    return pool_id == POOL_SECONDARY ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_pass : GLOBAL_STATE->SYSTEM_MODULE.pool_pass;
+}
+
+int stratum_get_next_pool_uid(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    if (pool_id < 0 || pool_id >= POOL_COUNT) {
+        return stratum_get_next_uid(GLOBAL_STATE);
+    }
+
+    StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+    taskENTER_CRITICAL(&pool->mux);
+    int uid = pool->send_uid++;
+    taskEXIT_CRITICAL(&pool->mux);
+    return uid;
+}
+
+static void stratum_reset_pool_uid(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+    ESP_LOGI(TAG, "Resetting %s stratum uid", pool_label(pool_id));
+    taskENTER_CRITICAL(&pool->mux);
+    pool->send_uid = 1;
+    taskEXIT_CRITICAL(&pool->mux);
+}
+
+static void invalidate_active_pool_jobs(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
+    if (GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs != NULL) {
+        for (int i = 0; i < 128; i++) {
+            bm_job *job = GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[i];
+            if (job != NULL && job->pool_id == pool_id) {
+                GLOBAL_STATE->valid_jobs[i] = 0;
+                GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[i] = NULL;
+                free_bm_job(job);
+            }
+        }
+    }
+    ASIC_jobs_queue_clear_pool(&GLOBAL_STATE->ASIC_jobs_queue, pool_id);
+    pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+}
+
+static void invalidate_pool_notify(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    pthread_mutex_lock(&GLOBAL_STATE->stratum_work_lock);
+    StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+    if (pool->current_notify != NULL) {
+        STRATUM_V1_free_mining_notify(pool->current_notify);
+        pool->current_notify = NULL;
+    }
+    pool->valid_notify = false;
+    pool->extranonce_2 = 0;
+    pthread_cond_broadcast(&GLOBAL_STATE->stratum_work_updated);
+    pthread_mutex_unlock(&GLOBAL_STATE->stratum_work_lock);
+}
+
+static void invalidate_pool_work(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    invalidate_pool_notify(GLOBAL_STATE, pool_id);
+    invalidate_active_pool_jobs(GLOBAL_STATE, pool_id);
+}
+
 bool is_wifi_connected() {
     wifi_ap_record_t ap_info;
     if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
@@ -265,6 +363,31 @@ void stratum_close_connection(GlobalState * GLOBAL_STATE)
     }
     cleanQueue(GLOBAL_STATE);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+}
+
+void stratum_close_pool_connection(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    if (pool_id < 0 || pool_id >= POOL_COUNT) {
+        return;
+    }
+
+    StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+    ESP_LOGE(TAG, "Shutting down %s pool socket", pool_label(pool_id));
+
+    taskENTER_CRITICAL(&pool->mux);
+    esp_transport_handle_t transport = pool->transport;
+    pool->transport = NULL;
+    pool->connected = false;
+    pool->close_requested = true;
+    taskEXIT_CRITICAL(&pool->mux);
+
+    if (transport != NULL) {
+        esp_transport_close(transport);
+        esp_transport_destroy(transport);
+    }
+
+    invalidate_pool_work(GLOBAL_STATE, pool_id);
+    vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
 void stratum_primary_heartbeat(void * pvParameters)
@@ -346,9 +469,233 @@ void stratum_primary_heartbeat(void * pvParameters)
     }
 }
 
+static void handle_dual_pool_message(GlobalState *GLOBAL_STATE, int pool_id, StratumApiV1Message *message)
+{
+    StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+
+    if (message->method == MINING_NOTIFY) {
+        SYSTEM_notify_new_ntime(GLOBAL_STATE, message->mining_notification->ntime);
+
+        if (message->mining_notification->clean_jobs) {
+            invalidate_pool_work(GLOBAL_STATE, pool_id);
+        } else {
+            pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
+            ASIC_jobs_queue_clear_pool(&GLOBAL_STATE->ASIC_jobs_queue, pool_id);
+            pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+        }
+
+        message->mining_notification->difficulty = pool->stratum_difficulty;
+
+        pthread_mutex_lock(&GLOBAL_STATE->stratum_work_lock);
+        if (pool->current_notify != NULL) {
+            STRATUM_V1_free_mining_notify(pool->current_notify);
+        }
+        pool->current_notify = message->mining_notification;
+        message->mining_notification = NULL;
+        pool->valid_notify = true;
+        pool->extranonce_2 = 0;
+        pthread_cond_broadcast(&GLOBAL_STATE->stratum_work_updated);
+        pthread_mutex_unlock(&GLOBAL_STATE->stratum_work_lock);
+    } else if (message->method == MINING_SET_DIFFICULTY) {
+        if (message->new_difficulty != pool->stratum_difficulty) {
+            pool->stratum_difficulty = message->new_difficulty;
+            ESP_LOGI(TAG, "Set %s stratum difficulty: %.2f", pool_label(pool_id), pool->stratum_difficulty);
+        }
+    } else if (message->method == MINING_SET_VERSION_MASK ||
+            message->method == STRATUM_RESULT_VERSION_MASK) {
+        ESP_LOGI(TAG, "Set %s version mask: %08lx", pool_label(pool_id), message->version_mask);
+        pool->version_mask = message->version_mask;
+        pool->new_version_rolling_msg = true;
+    } else if (message->method == MINING_SET_EXTRANONCE ||
+            message->method == STRATUM_RESULT_SUBSCRIBE) {
+        char *old_extranonce = pool->extranonce_str;
+        pool->extranonce_str = message->extranonce_str;
+        pool->extranonce_2_len = message->extranonce_2_len;
+        message->extranonce_str = NULL;
+        free(old_extranonce);
+    } else if (message->method == MINING_PING) {
+        taskENTER_CRITICAL(&pool->mux);
+        esp_transport_handle_t transport = pool->transport;
+        taskEXIT_CRITICAL(&pool->mux);
+        if (transport != NULL) {
+            STRATUM_V1_pong(transport, message->message_id);
+        }
+    } else if (message->method == CLIENT_RECONNECT) {
+        ESP_LOGE(TAG, "%s pool requested client reconnect", pool_label(pool_id));
+        stratum_close_pool_connection(GLOBAL_STATE, pool_id);
+    } else if (message->method == STRATUM_RESULT) {
+        bool is_setup = message->message_id < pool->first_share_uid;
+        if (is_setup) {
+            if (message->response_success) {
+                ESP_LOGI(TAG, "%s setup message accepted", pool_label(pool_id));
+            } else {
+                ESP_LOGE(TAG, "%s setup message rejected: %s", pool_label(pool_id), message->error_str);
+            }
+        } else {
+            if (message->response_success) {
+                ESP_LOGI(TAG, "%s share accepted", pool_label(pool_id));
+                SYSTEM_notify_accepted_share(GLOBAL_STATE, pool_id);
+            } else {
+                ESP_LOGW(TAG, "%s share rejected: %s", pool_label(pool_id), message->error_str);
+                SYSTEM_notify_rejected_share(GLOBAL_STATE, pool_id, message->error_str);
+            }
+        }
+    }
+}
+
+static void stratum_dual_pool_worker(void *pvParameters)
+{
+    stratum_pool_task_params_t params = *(stratum_pool_task_params_t *)pvParameters;
+    free(pvParameters);
+
+    GlobalState *GLOBAL_STATE = params.state;
+    int pool_id = params.pool_id;
+    StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+    int retry_attempts = 0;
+    int retry_critical_attempts = 0;
+
+    while (1) {
+        char *stratum_url = pool_url(GLOBAL_STATE, pool_id);
+        uint16_t port = pool_port(GLOBAL_STATE, pool_id);
+        tls_mode tls = pool_tls(GLOBAL_STATE, pool_id);
+        char *cert = pool_cert(GLOBAL_STATE, pool_id);
+
+        if (stratum_url == NULL || stratum_url[0] == '\0') {
+            ESP_LOGW(TAG, "No %s pool configured", pool_label(pool_id));
+            invalidate_pool_work(GLOBAL_STATE, pool_id);
+            vTaskDelay(pdMS_TO_TICKS(60000));
+            continue;
+        }
+
+        if (!is_wifi_connected()) {
+            ESP_LOGI(TAG, "WiFi disconnected, %s pool waiting", pool_label(pool_id));
+            vTaskDelay(pdMS_TO_TICKS(10000));
+            continue;
+        }
+
+        stratum_connection_info_t conn_info;
+        if (resolve_stratum_address(stratum_url, port, &conn_info) != ESP_OK) {
+            ESP_LOGE(TAG, "DNS resolution failed for %s pool: %s", pool_label(pool_id), stratum_url);
+            retry_attempts++;
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            continue;
+        }
+
+        ESP_LOGI(TAG, "Connecting %s pool to: stratum+tcp://%s:%d (%s)", pool_label(pool_id), stratum_url, port, conn_info.host_ip);
+
+        esp_transport_handle_t transport = STRATUM_V1_transport_init(tls, cert);
+        if (transport == NULL) {
+            ESP_LOGE(TAG, "%s transport initialization failed", pool_label(pool_id));
+            if (++retry_critical_attempts > MAX_CRITICAL_RETRY_ATTEMPTS) {
+                ESP_LOGE(TAG, "Max retry attempts reached, restarting...");
+                esp_restart();
+            }
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            continue;
+        }
+        retry_critical_attempts = 0;
+
+        if (tls != DISABLED) {
+            esp_transport_ssl_set_common_name(transport, stratum_url);
+        }
+
+        esp_err_t ret = esp_transport_connect(transport, conn_info.host_ip, port, TRANSPORT_TIMEOUT_MS);
+        if (ret != ESP_OK) {
+            retry_attempts++;
+            ESP_LOGE(TAG, "%s transport unable to connect to %s:%d (errno %d). Attempt: %d", pool_label(pool_id), stratum_url, port, ret, retry_attempts);
+            esp_transport_close(transport);
+            esp_transport_destroy(transport);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            continue;
+        }
+
+        set_socket_options(transport);
+        taskENTER_CRITICAL(&pool->mux);
+        pool->transport = transport;
+        pool->connected = true;
+        pool->close_requested = false;
+        taskEXIT_CRITICAL(&pool->mux);
+
+        ESP_LOGI(TAG, "Connected %s pool to %s:%d", pool_label(pool_id), stratum_url, port);
+
+        stratum_reset_pool_uid(GLOBAL_STATE, pool_id);
+        invalidate_pool_work(GLOBAL_STATE, pool_id);
+
+        STRATUM_V1_configure_version_rolling(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), &pool->version_mask);
+        STRATUM_V1_subscribe(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), GLOBAL_STATE->asic_model_str);
+        STRATUM_V1_authorize(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), pool_user(GLOBAL_STATE, pool_id), pool_pass(GLOBAL_STATE, pool_id));
+
+#ifdef CONFIG_STRATUM_SUGGEST_DIFFICULTY
+        if (STRATUM_DIFFICULTY > 0) {
+            STRATUM_V1_suggest_difficulty(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), STRATUM_DIFFICULTY);
+        }
+#endif
+
+        taskENTER_CRITICAL(&pool->mux);
+        pool->first_share_uid = pool->send_uid;
+        taskEXIT_CRITICAL(&pool->mux);
+
+        StratumApiV1Message message = {0};
+        StratumV1RxBuffer rx = {0};
+        STRATUM_V1_initialize_rx_buffer(&rx);
+        retry_attempts = 0;
+
+        while (1) {
+            char *line = STRATUM_V1_receive_jsonrpc_line_ctx(transport, &rx);
+            if (!line) {
+                ESP_LOGE(TAG, "%s pool failed to receive JSON-RPC line, reconnecting", pool_label(pool_id));
+                retry_attempts++;
+                stratum_close_pool_connection(GLOBAL_STATE, pool_id);
+                break;
+            }
+
+            STRATUM_V1_parse(&message, line);
+            free(line);
+            handle_dual_pool_message(GLOBAL_STATE, pool_id, &message);
+
+            bool closed = false;
+            taskENTER_CRITICAL(&pool->mux);
+            closed = pool->transport == NULL || pool->close_requested;
+            taskEXIT_CRITICAL(&pool->mux);
+
+            STRATUM_V1_reset_message(&message);
+            if (closed) {
+                break;
+            }
+        }
+
+        STRATUM_V1_reset_message(&message);
+        STRATUM_V1_free_rx_buffer(&rx);
+        stratum_close_pool_connection(GLOBAL_STATE, pool_id);
+    }
+}
+
 void stratum_task(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
+
+    if (GLOBAL_STATE->SYSTEM_MODULE.pool_mode == POOL_MODE_DUAL) {
+        ESP_LOGI(TAG, "Starting dual-pool stratum mode (%u%% primary / %u%% secondary)",
+                 GLOBAL_STATE->SYSTEM_MODULE.pool_balance,
+                 100 - GLOBAL_STATE->SYSTEM_MODULE.pool_balance);
+
+        for (int i = 0; i < POOL_COUNT; i++) {
+            stratum_pool_task_params_t *params = malloc(sizeof(stratum_pool_task_params_t));
+            if (params == NULL) {
+                ESP_LOGE(TAG, "Failed to allocate %s pool task params", pool_label(i));
+                continue;
+            }
+            params->state = GLOBAL_STATE;
+            params->pool_id = i;
+
+            char task_name[24];
+            snprintf(task_name, sizeof(task_name), "stratum %s", pool_label(i));
+            xTaskCreate(stratum_dual_pool_worker, task_name, 8192, params, 5, NULL);
+        }
+
+        vTaskDelete(NULL);
+        return;
+    }
 
     primary_stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
     primary_stratum_port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
@@ -360,6 +707,7 @@ void stratum_task(void * pvParameters)
     char * cert = GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
 
     STRATUM_V1_initialize_buffer();
+    StratumApiV1Message stratum_api_v1_message = {0};
     int retry_attempts = 0;
     int retry_critical_attempts = 0;
 
@@ -544,10 +892,10 @@ void stratum_task(void * pvParameters)
                 } else {
                     if (stratum_api_v1_message.response_success) {
                         ESP_LOGI(TAG, "message result accepted");
-                        SYSTEM_notify_accepted_share(GLOBAL_STATE);
+                        SYSTEM_notify_accepted_share(GLOBAL_STATE, GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? POOL_SECONDARY : POOL_PRIMARY);
                     } else {
                         ESP_LOGW(TAG, "message result rejected: %s", stratum_api_v1_message.error_str);
-                        SYSTEM_notify_rejected_share(GLOBAL_STATE, stratum_api_v1_message.error_str);
+                        SYSTEM_notify_rejected_share(GLOBAL_STATE, GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? POOL_SECONDARY : POOL_PRIMARY, stratum_api_v1_message.error_str);
                     }
                 }
             }

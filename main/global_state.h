@@ -19,6 +19,15 @@
 
 #define HISTORY_LENGTH 100
 #define DIFF_STRING_SIZE 10
+#define POOL_PRIMARY 0
+#define POOL_SECONDARY 1
+#define POOL_COUNT 2
+
+typedef enum
+{
+    POOL_MODE_FALLBACK = 0,
+    POOL_MODE_DUAL = 1,
+} PoolMode;
 
 typedef enum
 {
@@ -84,6 +93,8 @@ typedef struct
     char * pool_cert;
     char * fallback_pool_cert;
     bool is_using_fallback;
+    uint16_t pool_mode;
+    uint16_t pool_balance;
     char pool_connection_info[64];
     uint16_t overheat_mode;
     uint16_t power_fault;
@@ -105,6 +116,26 @@ typedef struct
 
 typedef struct
 {
+    esp_transport_handle_t transport;
+    portMUX_TYPE mux;
+    int send_uid;
+    int first_share_uid;
+    bool connected;
+    bool valid_notify;
+    bool close_requested;
+    char *extranonce_str;
+    int extranonce_2_len;
+    uint32_t version_mask;
+    bool new_version_rolling_msg;
+    double stratum_difficulty;
+    mining_notify *current_notify;
+    uint64_t extranonce_2;
+    uint64_t shares_accepted;
+    uint64_t shares_rejected;
+} StratumPoolState;
+
+typedef struct
+{
     DeviceModel device_model;
     char * device_model_str;
     int board_version;
@@ -115,6 +146,11 @@ typedef struct
 
     work_queue stratum_queue;
     work_queue ASIC_jobs_queue;
+
+    StratumPoolState pools[POOL_COUNT];
+    pthread_mutex_t stratum_work_lock;
+    pthread_cond_t stratum_work_updated;
+    int pool_error_accum;
 
     SystemModule SYSTEM_MODULE;
     AsicTaskModule ASIC_TASK_MODULE;

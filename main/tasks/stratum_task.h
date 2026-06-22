@@ -8,6 +8,8 @@ typedef struct
 
 void stratum_task(void *pvParameters);
 void stratum_close_connection(GlobalState * GLOBAL_STATE);
+void stratum_close_pool_connection(GlobalState * GLOBAL_STATE, int pool_id);
 int stratum_get_next_uid(GlobalState * GLOBAL_STATE);
+int stratum_get_next_pool_uid(GlobalState * GLOBAL_STATE, int pool_id);
 
 #endif

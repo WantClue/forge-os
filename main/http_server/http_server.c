@@ -683,6 +683,18 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "overclockEnabled")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_OVERCLOCK_ENABLED, item->valueint);
     }
+    if ((item = cJSON_GetObjectItem(root, "poolMode")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_POOL_MODE, item->valueint ? POOL_MODE_DUAL : POOL_MODE_FALLBACK);
+    }
+    if ((item = cJSON_GetObjectItem(root, "poolBalance")) != NULL) {
+        int balance = item->valueint;
+        if (balance < 0) {
+            balance = 0;
+        } else if (balance > 100) {
+            balance = 100;
+        }
+        nvs_config_set_u16(NVS_CONFIG_POOL_BALANCE, balance);
+    }
 
     cJSON_Delete(root);
     httpd_resp_set_type(req, "application/json");
@@ -784,6 +796,20 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddBoolToObject(root, "requestFromAp", request_from_ap);
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
+    cJSON_AddNumberToObject(root, "poolMode", nvs_config_get_u16(NVS_CONFIG_POOL_MODE, POOL_MODE_FALLBACK));
+    cJSON_AddNumberToObject(root, "poolBalance", nvs_config_get_u16(NVS_CONFIG_POOL_BALANCE, 50));
+
+    cJSON * pools_array = cJSON_CreateArray();
+    cJSON_AddItemToObject(root, "pools", pools_array);
+    for (int i = 0; i < POOL_COUNT; i++) {
+        cJSON * pool_obj = cJSON_CreateObject();
+        cJSON_AddBoolToObject(pool_obj, "connected", GLOBAL_STATE->pools[i].connected);
+        cJSON_AddBoolToObject(pool_obj, "validNotify", GLOBAL_STATE->pools[i].valid_notify);
+        cJSON_AddNumberToObject(pool_obj, "difficulty", GLOBAL_STATE->pools[i].stratum_difficulty);
+        cJSON_AddNumberToObject(pool_obj, "accepted", GLOBAL_STATE->pools[i].shares_accepted);
+        cJSON_AddNumberToObject(pool_obj, "rejected", GLOBAL_STATE->pools[i].shares_rejected);
+        cJSON_AddItemToArray(pools_array, pool_obj);
+    }
 
     cJSON * error_array = cJSON_CreateArray();
     cJSON_AddItemToObject(root, "sharesRejectedReasons", error_array);

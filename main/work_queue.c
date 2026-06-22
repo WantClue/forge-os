@@ -109,3 +109,33 @@ void ASIC_jobs_queue_clear(work_queue *queue)
     pthread_cond_signal(&queue->not_full);
     pthread_mutex_unlock(&queue->lock);
 }
+
+void ASIC_jobs_queue_clear_pool(work_queue *queue, int pool_id)
+{
+    pthread_mutex_lock(&queue->lock);
+
+    int remaining = queue->count;
+    int new_count = 0;
+    int new_tail = queue->head;
+
+    for (int i = 0; i < remaining; i++)
+    {
+        bm_job *next_work = queue->buffer[(queue->head + i) % QUEUE_SIZE];
+        if (next_work != NULL && next_work->pool_id == pool_id) {
+            free(next_work->jobid);
+            free(next_work->extranonce2);
+            free(next_work);
+            continue;
+        }
+
+        queue->buffer[new_tail] = next_work;
+        new_tail = (new_tail + 1) % QUEUE_SIZE;
+        new_count++;
+    }
+
+    queue->tail = new_tail;
+    queue->count = new_count;
+
+    pthread_cond_signal(&queue->not_full);
+    pthread_mutex_unlock(&queue->lock);
+}

@@ -64,6 +64,10 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 
     GLOBAL_STATE->stratum_mux = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
     GLOBAL_STATE->send_uid = 1;
+    pthread_mutex_init(&GLOBAL_STATE->stratum_work_lock, NULL);
+    pthread_cond_init(&GLOBAL_STATE->stratum_work_updated, NULL);
+    pthread_mutex_init(&GLOBAL_STATE->valid_jobs_lock, NULL);
+    GLOBAL_STATE->pool_error_accum = 0;
 
     // set the pool url
     module->pool_url = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
@@ -91,6 +95,33 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 
     // set fallback to false.
     module->is_using_fallback = false;
+    module->pool_mode = nvs_config_get_u16(NVS_CONFIG_POOL_MODE, POOL_MODE_FALLBACK);
+    if (module->pool_mode > POOL_MODE_DUAL) {
+        module->pool_mode = POOL_MODE_FALLBACK;
+    }
+    module->pool_balance = nvs_config_get_u16(NVS_CONFIG_POOL_BALANCE, 50);
+    if (module->pool_balance > 100) {
+        module->pool_balance = 50;
+    }
+
+    for (int i = 0; i < POOL_COUNT; i++) {
+        GLOBAL_STATE->pools[i].transport = NULL;
+        GLOBAL_STATE->pools[i].mux = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
+        GLOBAL_STATE->pools[i].send_uid = 1;
+        GLOBAL_STATE->pools[i].first_share_uid = 1;
+        GLOBAL_STATE->pools[i].connected = false;
+        GLOBAL_STATE->pools[i].valid_notify = false;
+        GLOBAL_STATE->pools[i].close_requested = false;
+        GLOBAL_STATE->pools[i].extranonce_str = NULL;
+        GLOBAL_STATE->pools[i].extranonce_2_len = 0;
+        GLOBAL_STATE->pools[i].version_mask = 0;
+        GLOBAL_STATE->pools[i].new_version_rolling_msg = false;
+        GLOBAL_STATE->pools[i].stratum_difficulty = 8192.0;
+        GLOBAL_STATE->pools[i].current_notify = NULL;
+        GLOBAL_STATE->pools[i].extranonce_2 = 0;
+        GLOBAL_STATE->pools[i].shares_accepted = 0;
+        GLOBAL_STATE->pools[i].shares_rejected = 0;
+    }
 
     // Initialize overheat_mode
     module->overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
@@ -182,11 +213,14 @@ static void switch_led(int num, uint8_t state)
     }
 }
 
-void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE)
+void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE, int pool_id)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     module->shares_accepted++;
+    if (pool_id >= 0 && pool_id < POOL_COUNT) {
+        GLOBAL_STATE->pools[pool_id].shares_accepted++;
+    }
     switch_led(1, 1);
 }
 
@@ -196,11 +230,14 @@ static int compare_rejected_reason_stats(const void *a, const void *b) {
     return (eb->count > ea->count) - (ea->count > eb->count);
 }
 
-void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE, char * error_msg)
+void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE, int pool_id, char * error_msg)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     module->shares_rejected++;
+    if (pool_id >= 0 && pool_id < POOL_COUNT) {
+        GLOBAL_STATE->pools[pool_id].shares_rejected++;
+    }
 
     for (int i = 0; i < module->rejected_reason_stats_count; i++) {
         if (strncmp(module->rejected_reason_stats[i].message, error_msg, sizeof(module->rejected_reason_stats[i].message) - 1) == 0) {

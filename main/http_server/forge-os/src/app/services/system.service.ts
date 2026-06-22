@@ -47,6 +47,12 @@ export class SystemService {
           sharesAccepted: 1,
           sharesRejected: 0,
           sharesRejectedReasons: [],
+          poolMode: 0,
+          poolBalance: 50,
+          pools: [
+            { connected: true, validNotify: true, difficulty: 8192, accepted: 1, rejected: 0 },
+            { connected: false, validNotify: false, difficulty: 8192, accepted: 0, rejected: 0 }
+          ],
           uptimeSeconds: 38,
           asicCount: 1,
           smallCoreCount: 672,

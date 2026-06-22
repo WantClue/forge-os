@@ -22,6 +22,11 @@ export class PoolComponent implements OnInit {
     //{ label: 'Enabled (Custom CA)', value: 2 }
   ];
 
+  poolModes = [
+    { label: 'Fallback', value: 0 },
+    { label: 'Dual Pool', value: 1 }
+  ];
+
   constructor(
     private fb: FormBuilder,
     private systemService: SystemService,
@@ -36,6 +41,12 @@ export class PoolComponent implements OnInit {
       )
       .subscribe(info => {
         this.form = this.fb.group({
+          poolMode: [info.poolMode ?? 0],
+          poolBalance: [info.poolBalance ?? 50, [
+            Validators.required,
+            Validators.min(0),
+            Validators.max(100)
+          ]],
           stratumURL: [info.stratumURL, [
             Validators.required,
             Validators.pattern(/^(?!.*stratum\+tcp:\/\/).*$/),
