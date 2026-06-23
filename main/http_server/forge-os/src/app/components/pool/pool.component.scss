@@ -133,6 +133,58 @@
   }
 }
 
+// PrimeNG 19 TabView classes
+::ng-deep .p-tabs {
+  .p-tablist {
+    background: transparent;
+  }
+
+  .p-tablist-content,
+  .p-tablist-tab-list {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--card-border);
+    gap: 0.5rem;
+  }
+
+  .p-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: -2px;
+    transition: all 0.3s ease;
+    gap: 0.5rem;
+
+    &:hover {
+      color: var(--text-primary);
+      background: rgba(99, 102, 241, 0.05);
+      border-bottom-color: rgba(99, 102, 241, 0.3);
+    }
+
+    &:focus,
+    &:focus-visible {
+      box-shadow: none;
+      outline: none;
+    }
+
+    &.p-tab-active {
+      background: transparent;
+      color: #6366f1;
+      border-bottom-color: #6366f1;
+    }
+  }
+
+  .p-tabpanels {
+    background: transparent;
+    color: var(--text-primary);
+    padding: 1.5rem 0 0;
+    border: none;
+  }
+}
+
 // Form Elements
 .field {
   margin-bottom: 1.5rem;

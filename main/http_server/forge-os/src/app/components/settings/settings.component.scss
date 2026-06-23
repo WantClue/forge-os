@@ -83,6 +83,31 @@
   margin-bottom: 2rem;
 }
 
+.settings-update-grid {
+  align-items: stretch;
+}
+
+.settings-update-column {
+  display: flex;
+}
+
+.settings-update-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-upload-card {
+  h2 {
+    margin-bottom: 1rem;
+  }
+
+  small {
+    margin-top: 0.5rem;
+  }
+}
+
 // Version and Update Cards
 .version-card, .update-card {
   @extend %base-card;
@@ -183,6 +208,19 @@ select {
     &:hover {
       background: linear-gradient(135deg, #5855f1, #059baa);
     }
+  }
+}
+
+::ng-deep .settings-upload-card {
+  .p-fileupload-basic {
+    justify-content: flex-start;
+    min-height: 3rem;
+  }
+
+  .p-fileupload-choose-button.p-button {
+    min-height: 2.75rem;
+    padding: 0.75rem 1.5rem;
+    line-height: 1;
   }
 }
 

@@ -7,6 +7,8 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ToastrModule } from 'ngx-toastr';
+import Aura from '@primeng/themes/aura';
+import { providePrimeNG } from 'primeng/config';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -79,6 +81,20 @@ const components = [
     DynamicDialogModule
   ],
   providers: [
+    providePrimeNG({
+      ripple: false,
+      inputStyle: 'outlined',
+      theme: {
+        preset: Aura,
+        options: {
+          darkModeSelector: '.layout-theme-dark',
+          cssLayer: {
+            name: 'primeng',
+            order: 'primeng, forge-os'
+          }
+        }
+      }
+    }),
     { provide: LocationStrategy, useClass: HashLocationStrategy },
     DialogService,
     PrimeDialogService
