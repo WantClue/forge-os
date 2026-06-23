@@ -220,6 +220,30 @@
   }
 }
 
+::ng-deep .field.p-fluid {
+  .p-inputtext,
+  textarea.p-inputtextarea,
+  p-dropdown,
+  p-select,
+  .p-dropdown,
+  .p-select,
+  .p-inputwrapper {
+    width: 100% !important;
+  }
+
+  .p-dropdown,
+  .p-select {
+    display: flex;
+    min-height: 3rem;
+  }
+
+  .p-dropdown-label,
+  .p-select-label {
+    flex: 1 1 auto;
+    width: 1%;
+  }
+}
+
 // Password field with icon
 .p-input-icon-right {
   position: relative;
