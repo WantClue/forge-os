@@ -13,9 +13,10 @@ const SWARM_REFRESH_TIME = 'SWARM_REFRESH_TIME';
 
 type SwarmDevice = { IP: string; ASICModel: string; deviceModel: string; swarmColor: string; asicCount: number; [key: string]: any };
 @Component({
-  selector: 'app-swarm',
-  templateUrl: './swarm.component.html',
-  styleUrls: ['./swarm.component.scss']
+    selector: 'app-swarm',
+    templateUrl: './swarm.component.html',
+    styleUrls: ['./swarm.component.scss'],
+    standalone: false
 })
 export class SwarmComponent implements OnInit, OnDestroy {
 

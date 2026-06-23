@@ -7,9 +7,10 @@ import { SystemService } from "src/app/services/system.service"
 import type { ISystemInfo } from "src/models/ISystemInfo"
 
 @Component({
-  selector: "app-home",
-  templateUrl: "./home.component.html",
-  styleUrls: ["./home.component.scss"],
+    selector: "app-home",
+    templateUrl: "./home.component.html",
+    styleUrls: ["./home.component.scss"],
+    standalone: false
 })
 export class HomeComponent {
   public readonly dualPoolMode = 1
