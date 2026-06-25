@@ -1,8 +1,9 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
 @Pipe({
-  name: 'diffSuffix',
-  pure: true
+    name: 'diffSuffix',
+    pure: true,
+    standalone: false
 })
 export class DiffSuffixPipe implements PipeTransform {
 

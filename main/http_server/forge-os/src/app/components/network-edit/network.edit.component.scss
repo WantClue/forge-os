@@ -52,6 +52,15 @@
   }
 }
 
+// PrimeNG 19 no longer stretches inputs via the legacy `.p-fluid` class, so
+// force form controls to fill their grid column (matches the pool component).
+::ng-deep .field.p-fluid {
+  // Direct-child inputs only — leaves the SSID's .p-inputgroup untouched.
+  > .col-12 > .p-inputtext {
+    width: 100% !important;
+  }
+}
+
 // Input Styling
 ::ng-deep .p-inputtext {
   background: rgba(30, 41, 59, 0.8) !important;
@@ -74,9 +83,12 @@
 
 // Input Group Styling (SSID with scan button)
 ::ng-deep .p-inputgroup {
+  align-items: stretch;
+
   .p-inputtext {
     border-radius: 0.5rem 0 0 0.5rem !important;
     border-right: none !important;
+    min-height: 3rem !important;
   }
 
   .p-button {
@@ -86,6 +98,19 @@
     border-left: none !important;
     color: white !important;
     min-width: 3rem !important;
+    height: auto !important;
+    min-height: 3rem !important;
+    padding: 0 1rem !important;
+    align-self: stretch;
+
+    &.p-button-icon-only {
+      width: 3rem !important;
+      padding: 0 !important;
+    }
+
+    .p-button-icon {
+      font-size: 1rem;
+    }
 
     &:hover:not(:disabled) {
       background: linear-gradient(135deg, #0284c7, #0369a1) !important;

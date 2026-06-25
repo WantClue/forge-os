@@ -11,9 +11,10 @@ import { eASICModel } from 'src/models/enum/eASICModel';
 import { ModalComponent } from '../modal/modal.component';
 
 @Component({
-  selector: 'app-settings',
-  templateUrl: './settings.component.html',
-  styleUrls: ['./settings.component.scss']
+    selector: 'app-settings',
+    templateUrl: './settings.component.html',
+    styleUrls: ['./settings.component.scss'],
+    standalone: false
 })
 export class SettingsComponent implements OnDestroy {
 

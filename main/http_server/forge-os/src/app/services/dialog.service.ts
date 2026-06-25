@@ -37,7 +37,7 @@ export class DialogService {
 }
 
 @Component({
-  template: `
+    template: `
     <style>
       ::ng-deep .p-button:focus {
         box-shadow: none !important;
@@ -51,7 +51,8 @@ export class DialogService {
         styleClass="w-full text-left"
       ></p-button>
     </div>
-  `
+  `,
+    standalone: false
 })
 export class DialogListComponent {
   constructor(public config: DynamicDialogConfig) {}

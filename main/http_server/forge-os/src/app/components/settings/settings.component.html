@@ -3,14 +3,14 @@
     <app-edit></app-edit>
 </div>
 
-<div class="grid">
-    <div class="col-12 lg:col-6">
-        <div class="card" *ngIf="checkLatestRelease == false">
+<div class="grid settings-update-grid">
+    <div class="col-12 lg:col-6 settings-update-column">
+        <div class="card settings-update-card" *ngIf="checkLatestRelease == false">
             <h5>Current Version: {{(info$ | async)?.version}}</h5>
             <h2>Release & Update: <p-button (onClick)="loadReleases()">Check</p-button></h2>
             <small>Clicking this button will connect to GitHub to check for recent updates</small>
         </div>
-        <div class="card" *ngIf="checkLatestRelease == true">
+        <div class="card settings-update-card" *ngIf="checkLatestRelease == true">
             <h5>Current Version: {{(info$ | async)?.version}}</h5>
 
             <ng-container *ngIf="releases$ | async as releases">
@@ -53,21 +53,21 @@
             </ng-container>
         </div>
     </div>
-    <div class="col-12 lg:col-6 xl:col-3">
-      <div class="card">
+    <div class="col-12 lg:col-6 xl:col-3 settings-update-column">
+      <div class="card settings-update-card settings-upload-card">
           <h2>Update Website</h2>
 
           <p-fileUpload #websiteUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaWWWUpdate($event)"
-              [auto]="true" chooseLabel="Browse" [disabled]="isUpdating"></p-fileUpload>
+              [auto]="true" chooseLabel="Browse" chooseIcon="pi-plus" [disabled]="isUpdating"></p-fileUpload>
 
           <small>(www.bin)</small>
       </div>
     </div>
-    <div class="col-12 lg:col-6 xl:col-3">
-        <div class="card">
+    <div class="col-12 lg:col-6 xl:col-3 settings-update-column">
+        <div class="card settings-update-card settings-upload-card">
             <h2>Update Firmware</h2>
             <p-fileUpload #firmwareUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaUpdate($event)"
-                [auto]="true" chooseLabel="Browse" [disabled]="isUpdating"></p-fileUpload>
+                [auto]="true" chooseLabel="Browse" chooseIcon="pi-plus" [disabled]="isUpdating"></p-fileUpload>
 
             <small>(bitforgeos.bin)</small>
         </div>
