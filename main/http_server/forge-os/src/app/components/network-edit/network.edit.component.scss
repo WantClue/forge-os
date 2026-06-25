@@ -52,6 +52,15 @@
   }
 }
 
+// PrimeNG 19 no longer stretches inputs via the legacy `.p-fluid` class, so
+// force form controls to fill their grid column (matches the pool component).
+::ng-deep .field.p-fluid {
+  // Direct-child inputs only — leaves the SSID's .p-inputgroup untouched.
+  > .col-12 > .p-inputtext {
+    width: 100% !important;
+  }
+}
+
 // Input Styling
 ::ng-deep .p-inputtext {
   background: rgba(30, 41, 59, 0.8) !important;
