@@ -270,6 +270,10 @@ static void invalidate_active_pool_jobs(GlobalState *GLOBAL_STATE, int pool_id)
     }
     ASIC_jobs_queue_clear_pool(&GLOBAL_STATE->ASIC_jobs_queue, pool_id);
     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
+
+    if (GLOBAL_STATE->ASIC_TASK_MODULE.semaphore != NULL) {
+        xSemaphoreGive(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore);
+    }
 }
 
 static void invalidate_pool_notify(GlobalState *GLOBAL_STATE, int pool_id)
