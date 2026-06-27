@@ -3,6 +3,7 @@ SRCS
     "./BitForgeHal/src/adc.c"
     "./BitForgeHal/src/i2c_bitforge.c"
     "main.c"
+    "setup_ble.c"
     "./NvsManager/src/nvs_config.c"
     "./HMI/src/input.c"
     "system.c"
@@ -61,6 +62,7 @@ PRIV_REQUIRES
     "esp_driver_i2c"
     "esp-tls"
     "tcp_transport"
+    "bt"
 
 EMBED_FILES
     "http_server/recovery_page.html"
