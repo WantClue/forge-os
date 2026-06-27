@@ -55,6 +55,11 @@ void nvs_config_set_string(const char * key, const char * value)
     err = nvs_set_str(handle, key, value);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Could not write nvs key: %s, value: %s", key, value);
+    } else {
+        err = nvs_commit(handle);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Could not commit nvs key: %s", key);
+        }
     }
 
     nvs_close(handle);
@@ -93,6 +98,11 @@ void nvs_config_set_u16(const char * key, const uint16_t value)
     err = nvs_set_u16(handle, key, value);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Could not write nvs key: %s, value: %u", key, value);
+    } else {
+        err = nvs_commit(handle);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Could not commit nvs key: %s", key);
+        }
     }
 
     nvs_close(handle);
@@ -133,6 +143,11 @@ void nvs_config_set_u64(const char * key, const uint64_t value)
     err = nvs_set_u64(handle, key, value);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Could not write nvs key: %s, value: %llu", key, value);
+    } else {
+        err = nvs_commit(handle);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Could not commit nvs key: %s", key);
+        }
     }
     nvs_close(handle);
 }

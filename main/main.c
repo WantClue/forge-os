@@ -22,6 +22,7 @@
 #include "nvs_device.h"
 #include "self_test.h"
 #include "asic.h"
+#include "setup_ble.h"
 
 static GlobalState GLOBAL_STATE = {
     .extranonce_str = NULL, 
@@ -60,6 +61,7 @@ static void ap_timeout_task(void * pvParameters)
         for (int attempt = 1; attempt <= AP_DISABLE_MAX_ATTEMPTS; attempt++) {
             esp_err_t err = wifi_softap_off();
             if (err == ESP_OK) {
+                setup_ble_stop();
                 ESP_LOGI(TAG, "Setup AP disabled; station WiFi remains active");
                 break;
             }
@@ -142,6 +144,10 @@ void app_main(void)
     wifi_init(wifi_ssid, wifi_pass, hostname, GLOBAL_STATE.SYSTEM_MODULE.ip_addr_str);
 
     generate_ssid(GLOBAL_STATE.SYSTEM_MODULE.ap_ssid);
+
+    if (GLOBAL_STATE.SYSTEM_MODULE.ap_enabled) {
+        setup_ble_start(&GLOBAL_STATE);
+    }
 
     SYSTEM_init_peripherals(&GLOBAL_STATE);
 
