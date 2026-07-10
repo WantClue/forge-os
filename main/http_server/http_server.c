@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -193,7 +194,12 @@ static bool is_request_from_ap(httpd_req_t * req)
 
 QueueHandle_t log_queue = NULL;
 
-static int fd = -1;
+static atomic_int websocket_fd = ATOMIC_VAR_INIT(-1);
+
+typedef struct {
+    int fd;
+    char text[];
+} websocket_log_message_t;
 
 #define REST_CHECK(a, str, goto_tag, ...)                                                                                          \
     do {                                                                                                                           \
@@ -1122,59 +1128,78 @@ int log_to_queue(const char * format, va_list args)
     va_copy(args_copy, args);
 
     // Calculate the required buffer size
-    int needed_size = vsnprintf(NULL, 0, format, args_copy) + 1;
+    int formatted_len = vsnprintf(NULL, 0, format, args_copy);
     va_end(args_copy);
+    if (formatted_len < 0) {
+        return 0;
+    }
 
-    // Allocate the buffer dynamically
-    char * log_buffer = (char *) calloc(needed_size + 2, sizeof(char)); // +2 for potential \n and \0
-    if (log_buffer == NULL) {
+    websocket_log_message_t * message = calloc(1, sizeof(*message) + formatted_len + 2);
+    if (message == NULL) {
         return 0;
     }
 
     // Format the string into the allocated buffer
     va_copy(args_copy, args);
-    vsnprintf(log_buffer, needed_size, format, args_copy);
+    vsnprintf(message->text, formatted_len + 1, format, args_copy);
     va_end(args_copy);
 
     // Ensure the log message ends with a newline
-    size_t len = strlen(log_buffer);
-    if (len > 0 && log_buffer[len - 1] != '\n') {
-        log_buffer[len] = '\n';
-        log_buffer[len + 1] = '\0';
+    size_t len = strlen(message->text);
+    if (len > 0 && message->text[len - 1] != '\n') {
+        message->text[len] = '\n';
+        message->text[len + 1] = '\0';
         len++;
     }
 
     // Print to standard output
-    printf("%s", log_buffer);
+    printf("%s", message->text);
 
-    if (xQueueSendToBack(log_queue, (void *) &log_buffer, (TickType_t) 0) != pdPASS) {
-        if (log_buffer != NULL) {
-            free((void *) log_buffer);
-        }
+    if (log_queue == NULL || xQueueSendToBack(log_queue, &message, (TickType_t) 0) != pdPASS) {
+        free(message);
     }
 
     return 0;
 }
 
-void send_log_to_websocket(char * message)
+static void send_log_to_websocket(void * arg)
 {
+    websocket_log_message_t * message = arg;
+
     // Prepare the WebSocket frame
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t *) message;
-    ws_pkt.len = strlen(message);
+    ws_pkt.payload = (uint8_t *) message->text;
+    ws_pkt.len = strlen(message->text);
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
-    // Ensure server and fd are valid
-    if (server != NULL && fd >= 0) {
-        // Send the WebSocket frame asynchronously
-        if (httpd_ws_send_frame_async(server, fd, &ws_pkt) != ESP_OK) {
-            esp_log_set_vprintf(vprintf);
+    // This callback runs in the HTTPD task, so the descriptor cannot be
+    // closed and reused between validation and transmission.
+    if (server != NULL && message->fd == atomic_load(&websocket_fd) &&
+        httpd_ws_get_fd_info(server, message->fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
+        if (httpd_ws_send_frame_async(server, message->fd, &ws_pkt) == ESP_OK) {
+            httpd_sess_update_lru_counter(server, message->fd);
+        } else {
+            int expected_fd = message->fd;
+            if (atomic_compare_exchange_strong(&websocket_fd, &expected_fd, -1)) {
+                esp_log_set_vprintf(vprintf);
+            }
+            httpd_sess_trigger_close(server, message->fd);
         }
     }
 
-    // Free the allocated buffer
-    free((void *) message);
+    free(message);
+}
+
+static void http_session_close(httpd_handle_t handle, int sockfd)
+{
+    int expected_fd = sockfd;
+    if (atomic_compare_exchange_strong(&websocket_fd, &expected_fd, -1)) {
+        esp_log_set_vprintf(vprintf);
+    }
+
+    (void) handle;
+    close(sockfd);
 }
 
 /*
@@ -1189,11 +1214,26 @@ esp_err_t echo_handler(httpd_req_t * req)
 
     if (req->method == HTTP_GET) {
         ESP_LOGI(TAG, "Handshake done, the new connection was opened");
-        fd = httpd_req_to_sockfd(req);
+        int new_fd = httpd_req_to_sockfd(req);
+        int old_fd = atomic_exchange(&websocket_fd, new_fd);
         esp_log_set_vprintf(log_to_queue);
+
+        // Logging supports one client. Close the previous WebSocket instead
+        // of leaving an unused persistent session in the HTTPD socket table.
+        if (old_fd >= 0 && old_fd != new_fd &&
+            httpd_ws_get_fd_info(server, old_fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
+            httpd_sess_trigger_close(server, old_fd);
+        }
         return ESP_OK;
     }
-    return ESP_OK;
+
+    // The logging WebSocket is server-to-client only. Read the frame header,
+    // then close clients that send application data.
+    httpd_ws_frame_t ws_pkt = {0};
+    if (httpd_ws_recv_frame(req, &ws_pkt, 0) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    return ws_pkt.len == 0 ? ESP_OK : ESP_FAIL;
 }
 
 // HTTP Error (404) Handler - Redirects all requests to the root page
@@ -1213,20 +1253,17 @@ esp_err_t http_404_error_handler(httpd_req_t * req, httpd_err_code_t err)
 void websocket_log_handler()
 {
     while (true) {
-        char * message = NULL;
+        websocket_log_message_t * message = NULL;
         if (xQueueReceive(log_queue, &message, (TickType_t) portMAX_DELAY) != pdPASS) {
             // message was never written by xQueueReceive — do not access it
             vTaskDelay(10 / portTICK_PERIOD_MS);
             continue;
         }
 
-        if (fd == -1) {
-            free((void *) message);
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            continue;
+        message->fd = atomic_load(&websocket_fd);
+        if (server == NULL || message->fd < 0 || httpd_queue_work(server, send_log_to_websocket, message) != ESP_OK) {
+            free(message);
         }
-
-        send_log_to_websocket(message);
     }
 }
 
@@ -1252,8 +1289,15 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192;
-    config.max_open_sockets = 10;
+    // Leave descriptors available for DNS, Stratum and outbound services.
+    config.max_open_sockets = 8;
     config.max_uri_handlers = 24;
+    config.lru_purge_enable = true;
+    config.keep_alive_enable = true;
+    config.keep_alive_idle = 30;
+    config.keep_alive_interval = 10;
+    config.keep_alive_count = 3;
+    config.close_fn = http_session_close;
 
     ESP_LOGI(TAG, "Starting HTTP Server");
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
