@@ -10,7 +10,6 @@ SRCS
     "work_queue.c"
     "./NvsManager/src/nvs_device.c"
     "lv_font_portfolio-6x8.c"
-    "logo.c"
     "./http_server/http_server.c"
     "./http_server/handler_ota_github.c"
     "./self_test/self_test.c"
