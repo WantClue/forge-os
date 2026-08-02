@@ -56,6 +56,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->current_hashrate = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
+    module->led_blink_enabled = nvs_config_get_u16(NVS_CONFIG_LED_BLINK, 1) != 0;
     module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
     module->best_session_nonce_diff = 0;
     module->start_time = esp_timer_get_time();
@@ -221,7 +222,25 @@ void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE, int pool_id)
     if (pool_id >= 0 && pool_id < POOL_COUNT) {
         GLOBAL_STATE->pools[pool_id].shares_accepted++;
     }
-    switch_led(1, 1);
+    if (module->led_blink_enabled) {
+        switch_led(1, 1);
+    }
+}
+
+void SYSTEM_set_led_blink_enabled(GlobalState * GLOBAL_STATE, bool enabled)
+{
+    GLOBAL_STATE->SYSTEM_MODULE.led_blink_enabled = enabled;
+    nvs_config_set_u16(NVS_CONFIG_LED_BLINK, enabled ? 1 : 0);
+
+    if (!enabled) {
+        // Kill any blink already in flight so the LED goes dark immediately.
+        if (led_timer_1) {
+            xTimerStop(led_timer_1, 0);
+        }
+        switch_led(1, 0);
+    }
+
+    ESP_LOGI(TAG, "Share LED blink %s", enabled ? "enabled" : "disabled");
 }
 
 static int compare_rejected_reason_stats(const void *a, const void *b) {
