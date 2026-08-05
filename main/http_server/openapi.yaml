@@ -88,14 +88,12 @@ components:
         - fallbackStratumUser
         - fanrpm
         - fanSpeed
-        - flipscreen
         - freeHeap
         - frequency
         - hashRate
         - hostname
         - idfVersion
         - invertfanpolarity
-        - invertscreen
         - isPSRAMAvailable
         - isUsingFallbackStratum
         - macAddr
@@ -162,9 +160,6 @@ components:
         fanSpeed:
           type: number
           description: Current fan speed percentage
-        flipscreen:
-          type: number
-          description: Screen flip setting (0=normal, 1=flipped)
         freeHeap:
           type: number
           description: Available heap memory in bytes
@@ -183,9 +178,6 @@ components:
         invertfanpolarity:
           type: number
           description: Fan polarity setting (0=normal, 1=inverted)
-        invertscreen:
-          type: number
-          description: Screen invert setting (0=normal, 1=inverted)
         isPSRAMAvailable:
           type: number
           description: Whether PSRAM is available (0=no, 1=yes)
@@ -329,22 +321,10 @@ components:
           minimum: 1
           examples:
             - 450
-        flipscreen:
-          type: integer
-          description: Whether to flip the screen orientation (0=normal, 1=flipped)
-          enum: [0, 1]
-          examples:
-            - 0
         overheat_mode:
           type: integer
           description: Overheat protection mode (0=disabled)
           enum: [0]
-          examples:
-            - 0
-        invertscreen:
-          type: integer
-          description: Whether to invert screen colors (0=normal, 1=inverted)
-          enum: [0, 1]
           examples:
             - 0
         invertfanpolarity:

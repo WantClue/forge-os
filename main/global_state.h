@@ -69,7 +69,6 @@ typedef struct
     uint64_t shares_rejected;
     RejectedReasonStat rejected_reason_stats[10];
     int rejected_reason_stats_count;
-    int screen_page;
     uint64_t best_nonce_diff;
     char best_diff_string[DIFF_STRING_SIZE];
     uint64_t best_session_nonce_diff;
@@ -99,20 +98,11 @@ typedef struct
     uint16_t overheat_mode;
     uint16_t power_fault;
     uint32_t lastClockSync;
-    bool is_screen_active;
     bool is_firmware_update;
     char firmware_update_filename[20];
     char firmware_update_status[20];
     char * asic_status;
 } SystemModule;
-
-typedef struct
-{
-    bool active;
-    char *message;
-    bool result;
-    bool finished;
-} SelfTestModule;
 
 typedef struct
 {
@@ -156,7 +146,6 @@ typedef struct
     AsicTaskModule ASIC_TASK_MODULE;
     PowerManagementModule POWER_MANAGEMENT_MODULE;
     HashrateMonitorModule HASHRATE_MONITOR_MODULE;
-    SelfTestModule SELF_TEST_MODULE;
 
     char * extranonce_str;
     int extranonce_2_len;

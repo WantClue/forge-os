@@ -12,7 +12,6 @@
 #include "adc.h"
 #include "nvs_config.h"
 #include "nvs_flash.h"
-#include "display.h"
 #include "input.h"
 #include "vcore.h"
 #include "utils.h"
@@ -33,8 +32,8 @@
  * LED Pattern              | Status            | Cause
  * -------------------------|-------------------|----------------------------------
  * LED1,LED2: ON BLINKING   | PASS              | All tests passed successfully
- * LED1: ON,  LED2: OFF     | PERIPHERAL_FAILURE| PSRAM, Display, Input, or 
- *                          |                   | Peripheral initialization failed
+ * LED1: ON,  LED2: OFF     | PERIPHERAL_FAILURE| PSRAM, Input, or Peripheral
+ *                          |                   | initialization failed
  * LED1: OFF, LED2: ON      | ASIC_FAILURE      | ASIC detection, hashrate, or
  *                          |                   | reference voltage test failed
  * LED1: ON,  LED2: ON      | POWER_FAILURE     | Voltage regulator or power
@@ -120,14 +119,9 @@ bool production_test(GlobalState * GLOBAL_STATE) {
     return false;
 }
 
-static void reset_self_test() {
+static void reset_self_test(void) {
     ESP_LOGI(TAG, "Long press detected...");
     xSemaphoreGive(BootSemaphore);
-}
-
-static void display_msg(char * msg, GlobalState * GLOBAL_STATE) 
-{
-    GLOBAL_STATE->SELF_TEST_MODULE.message = msg;
 }
 
 static esp_err_t test_fan_sense(GlobalState * GLOBAL_STATE)
@@ -281,7 +275,6 @@ esp_err_t test_init_peripherals(GlobalState * GLOBAL_STATE) {
 esp_err_t test_psram(GlobalState * GLOBAL_STATE){
     if(!esp_psram_is_initialized()) {
         ESP_LOGE(TAG, "No PSRAM available on ESP32!");
-        //display_msg("PSRAM:FAIL", GLOBAL_STATE);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -301,21 +294,25 @@ void execute_production_test(void * pvParameters)
 
     ESP_LOGI(TAG, "Running Self Tests");
 
-    if (configure_led() != ESP_OK) {
-        ESP_LOGE(TAG, "LED config failed!");
-        tests_done(GLOBAL_STATE, TESTS_FAILED, PERIPHERAL_FAILURE);
-    }
-
-    GLOBAL_STATE->SELF_TEST_MODULE.active = true;
-
-    // Create a binary semaphore
+    // Create a binary semaphore. Has to exist before the first tests_done() call,
+    // which blocks on it forever when a test fails.
     BootSemaphore = xSemaphoreCreateBinary();
-
-    gpio_install_isr_service(0);
 
     if (BootSemaphore == NULL) {
         ESP_LOGE(TAG, "Failed to create semaphore");
         return;
+    }
+
+    gpio_install_isr_service(0);
+
+    // A long press on the boot button is the only way out of a failed self test
+    if (input_init(NULL, reset_self_test) != ESP_OK) {
+        ESP_LOGE(TAG, "Input init failed!");
+    }
+
+    if (configure_led() != ESP_OK) {
+        ESP_LOGE(TAG, "LED config failed!");
+        tests_done(GLOBAL_STATE, TESTS_FAILED, PERIPHERAL_FAILURE);
     }
 
     //Run PSRAM test
@@ -383,9 +380,6 @@ void execute_production_test(void * pvParameters)
     //test for voltage regulator faults
     if (test_vreg_faults(GLOBAL_STATE) != ESP_OK) {
         ESP_LOGE(TAG, "VCORE check fault failed!");
-        char error_buf[20];
-        snprintf(error_buf, 20, "VCORE:PWR FAULT");
-        //display_msg(error_buf, GLOBAL_STATE);
         tests_done(GLOBAL_STATE, TESTS_FAILED, POWER_FAILURE);
     }
 
@@ -499,7 +493,7 @@ void execute_production_test(void * pvParameters)
     ESP_LOGI(TAG, "Hashrate: %.2f, Expected: %.2f", hashrate, expected_hashrate_ghs);
 
     if (hashrate < expected_hashrate_ghs) {
-        display_msg("HASHRATE:FAIL", GLOBAL_STATE);
+        ESP_LOGE(TAG, "Hashrate test failed!");
         tests_done(GLOBAL_STATE, TESTS_FAILED, ASIC_FAILURE);
     }
 
@@ -527,8 +521,6 @@ void execute_production_test(void * pvParameters)
 static void tests_done(GlobalState * GLOBAL_STATE, bool test_result, TEST_FAILED_CAUSE cause) 
 {
 
-    GLOBAL_STATE->SELF_TEST_MODULE.result = test_result;
-    GLOBAL_STATE->SELF_TEST_MODULE.finished = true;
     Power_disable(GLOBAL_STATE);
 
     if (test_result == TESTS_FAILED) {
