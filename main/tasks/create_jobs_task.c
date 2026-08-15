@@ -63,10 +63,30 @@ void create_jobs_task(void *pvParameters)
         {
             if (should_generate_more_work(GLOBAL_STATE))
             {
+                // Snapshot the extranonce under the lock rather than handing
+                // the shared pointer to generate_work: stratum_task swaps and
+                // frees it from another task on a re-subscribe or a
+                // mining.set_extranonce, and it stays live all the way through
+                // construct_coinbase_tx.
+                pthread_mutex_lock(&GLOBAL_STATE->stratum_work_lock);
+                char *extranonce_str = GLOBAL_STATE->extranonce_str ? strdup(GLOBAL_STATE->extranonce_str) : NULL;
+                int extranonce_2_len = GLOBAL_STATE->extranonce_2_len;
+                uint32_t version_mask = GLOBAL_STATE->version_mask;
+                pthread_mutex_unlock(&GLOBAL_STATE->stratum_work_lock);
+
+                if (extranonce_str == NULL || extranonce_2_len <= 0) {
+                    // No subscribe response yet (or out of memory) - nothing we
+                    // can build a coinbase from.
+                    free(extranonce_str);
+                    vTaskDelay(100 / portTICK_PERIOD_MS);
+                    continue;
+                }
+
                 generate_work(GLOBAL_STATE, mining_notification, extranonce_2,
-                              GLOBAL_STATE->extranonce_str, GLOBAL_STATE->extranonce_2_len,
-                              GLOBAL_STATE->version_mask,
+                              extranonce_str, extranonce_2_len,
+                              version_mask,
                               GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? POOL_SECONDARY : POOL_PRIMARY);
+                free(extranonce_str);
 
                 // Increase extranonce_2 for the next job.
                 extranonce_2++;

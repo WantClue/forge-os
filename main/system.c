@@ -64,6 +64,10 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 
     GLOBAL_STATE->stratum_mux = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
     GLOBAL_STATE->send_uid = 1;
+    GLOBAL_STATE->transport = NULL;
+    GLOBAL_STATE->transport_fd = -1;
+    GLOBAL_STATE->close_requested = false;
+    pthread_mutex_init(&GLOBAL_STATE->transport_lock, NULL);
     pthread_mutex_init(&GLOBAL_STATE->stratum_work_lock, NULL);
     pthread_cond_init(&GLOBAL_STATE->stratum_work_updated, NULL);
     pthread_mutex_init(&GLOBAL_STATE->valid_jobs_lock, NULL);
@@ -106,6 +110,8 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 
     for (int i = 0; i < POOL_COUNT; i++) {
         GLOBAL_STATE->pools[i].transport = NULL;
+        GLOBAL_STATE->pools[i].transport_fd = -1;
+        pthread_mutex_init(&GLOBAL_STATE->pools[i].transport_lock, NULL);
         GLOBAL_STATE->pools[i].mux = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
         GLOBAL_STATE->pools[i].send_uid = 1;
         GLOBAL_STATE->pools[i].first_share_uid = 1;

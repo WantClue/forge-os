@@ -198,6 +198,59 @@ static void set_socket_options(esp_transport_handle_t transport)
     }
 }
 
+// ---------------------------------------------------------------------------
+// transport ownership
+//
+// A transport may only be closed and destroyed by the worker task that created
+// it. Every other task -- the primary heartbeat, ASIC_result_task -- can only
+// *request* a close. This is what keeps a worker that is parked inside
+// esp_transport_read() (up to SO_RCVTIMEO, three minutes) from having the
+// handle freed underneath it.
+//
+// `lock` guards the handle and its socket fd together. Rules:
+//   - the worker publishes the pair with conn_publish() after connecting,
+//   - anyone using the transport (e.g. writing a share) holds `lock` for the
+//     whole operation, so the worker cannot destroy it mid-write,
+//   - the worker takes the pair away with conn_claim() before destroying, so
+//     once a user sees NULL the handle is gone and must not be touched,
+//   - conn_request_close() kicks the worker out of its blocking read with
+//     shutdown(), which leaves the fd allocated -- no window in which the
+//     worker could read from a recycled descriptor -- and never frees anything.
+// ---------------------------------------------------------------------------
+
+static void conn_publish(pthread_mutex_t *lock, esp_transport_handle_t *slot, int *fd_slot,
+                         esp_transport_handle_t transport)
+{
+    pthread_mutex_lock(lock);
+    *slot = transport;
+    *fd_slot = esp_transport_get_socket(transport);
+    pthread_mutex_unlock(lock);
+}
+
+// Takes the handle out of the shared slot so the caller can destroy it.
+// Returns NULL when there is nothing to destroy.
+static esp_transport_handle_t conn_claim(pthread_mutex_t *lock, esp_transport_handle_t *slot, int *fd_slot)
+{
+    pthread_mutex_lock(lock);
+    esp_transport_handle_t transport = *slot;
+    *slot = NULL;
+    *fd_slot = -1;
+    pthread_mutex_unlock(lock);
+    return transport;
+}
+
+// Wakes a worker blocked in esp_transport_read() without altering the
+// transport's lifetime. Held across the syscall so the owning worker cannot
+// close the descriptor while we are naming it.
+static void conn_request_close(pthread_mutex_t *lock, int *fd_slot)
+{
+    pthread_mutex_lock(lock);
+    if (*fd_slot >= 0) {
+        shutdown(*fd_slot, SHUT_RDWR);
+    }
+    pthread_mutex_unlock(lock);
+}
+
 static const char *pool_label(int pool_id)
 {
     return pool_id == POOL_SECONDARY ? "secondary" : "primary";
@@ -350,16 +403,16 @@ void stratum_reset_uid(GlobalState * GLOBAL_STATE)
     taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
 }
 
+// Worker-only: destroys the single-pool transport. Must not be called from any
+// task other than stratum_task -- use stratum_request_close() instead.
 void stratum_close_connection(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGE(TAG, "Shutting down socket and restarting...");
 
-    // Atomically take ownership of the transport handle so concurrent
-    // share submits in asic_result_task can't write into a destroyed transport.
-    taskENTER_CRITICAL(&GLOBAL_STATE->stratum_mux);
-    esp_transport_handle_t transport = GLOBAL_STATE->transport;
-    GLOBAL_STATE->transport = NULL;
-    taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
+    esp_transport_handle_t transport = conn_claim(&GLOBAL_STATE->transport_lock,
+                                                  &GLOBAL_STATE->transport,
+                                                  &GLOBAL_STATE->transport_fd);
+    GLOBAL_STATE->close_requested = false;
 
     if (transport != NULL) {
         esp_transport_close(transport);
@@ -369,6 +422,17 @@ void stratum_close_connection(GlobalState * GLOBAL_STATE)
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 }
 
+// Asks stratum_task to drop its connection. Safe from any task: it only kicks
+// the worker out of its read, and the worker does the destroying.
+void stratum_request_close(GlobalState * GLOBAL_STATE)
+{
+    ESP_LOGI(TAG, "Requesting stratum connection close");
+    GLOBAL_STATE->close_requested = true;
+    conn_request_close(&GLOBAL_STATE->transport_lock, &GLOBAL_STATE->transport_fd);
+}
+
+// Worker-only: destroys this pool's transport. Must not be called from any task
+// other than the pool's own worker -- use stratum_request_pool_close() instead.
 void stratum_close_pool_connection(GlobalState *GLOBAL_STATE, int pool_id)
 {
     if (pool_id < 0 || pool_id >= POOL_COUNT) {
@@ -378,9 +442,11 @@ void stratum_close_pool_connection(GlobalState *GLOBAL_STATE, int pool_id)
     StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
     ESP_LOGE(TAG, "Shutting down %s pool socket", pool_label(pool_id));
 
+    esp_transport_handle_t transport = conn_claim(&pool->transport_lock,
+                                                  &pool->transport,
+                                                  &pool->transport_fd);
+
     taskENTER_CRITICAL(&pool->mux);
-    esp_transport_handle_t transport = pool->transport;
-    pool->transport = NULL;
     pool->connected = false;
     pool->close_requested = true;
     taskEXIT_CRITICAL(&pool->mux);
@@ -392,6 +458,60 @@ void stratum_close_pool_connection(GlobalState *GLOBAL_STATE, int pool_id)
 
     invalidate_pool_work(GLOBAL_STATE, pool_id);
     vTaskDelay(pdMS_TO_TICKS(1000));
+}
+
+// Asks a pool worker to drop its connection. Safe from any task.
+void stratum_request_pool_close(GlobalState *GLOBAL_STATE, int pool_id)
+{
+    if (pool_id < 0 || pool_id >= POOL_COUNT) {
+        return;
+    }
+
+    StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+    ESP_LOGI(TAG, "Requesting %s pool connection close", pool_label(pool_id));
+
+    taskENTER_CRITICAL(&pool->mux);
+    pool->close_requested = true;
+    taskEXIT_CRITICAL(&pool->mux);
+
+    conn_request_close(&pool->transport_lock, &pool->transport_fd);
+}
+
+// Submits a share with the transport pinned for the duration of the write, so
+// a concurrent teardown cannot free it mid-send. Returns the byte count from
+// the underlying write, a negative errno-style value on write failure, or
+// STRATUM_SUBMIT_NO_CONNECTION when the pool is not currently connected.
+int stratum_submit_share(GlobalState *GLOBAL_STATE, int pool_id, const char *username,
+                         const char *job_id, const char *extranonce_2, uint32_t ntime,
+                         uint32_t nonce, uint32_t version_bits)
+{
+    pthread_mutex_t *lock;
+    esp_transport_handle_t *slot;
+    int uid;
+
+    if (GLOBAL_STATE->SYSTEM_MODULE.pool_mode == POOL_MODE_DUAL) {
+        if (pool_id < 0 || pool_id >= POOL_COUNT) {
+            return STRATUM_SUBMIT_NO_CONNECTION;
+        }
+        StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
+        lock = &pool->transport_lock;
+        slot = &pool->transport;
+        uid = stratum_get_next_pool_uid(GLOBAL_STATE, pool_id);
+    } else {
+        lock = &GLOBAL_STATE->transport_lock;
+        slot = &GLOBAL_STATE->transport;
+        uid = stratum_get_next_uid(GLOBAL_STATE);
+    }
+
+    pthread_mutex_lock(lock);
+    int ret = STRATUM_SUBMIT_NO_CONNECTION;
+    if (*slot != NULL) {
+        ret = STRATUM_V1_submit_share(*slot, uid, username, job_id, extranonce_2,
+                                      ntime, nonce, version_bits);
+    }
+    pthread_mutex_unlock(lock);
+
+    return ret;
 }
 
 void stratum_primary_heartbeat(void * pvParameters)
@@ -465,7 +585,9 @@ void stratum_primary_heartbeat(void * pvParameters)
         if (strstr(recv_buffer, "mining.notify") != NULL) {
             ESP_LOGI(TAG, "Heartbeat successful and in fallback mode. Switching back to primary.");
             GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback = false;
-            stratum_close_connection(GLOBAL_STATE);
+            // Only ask: stratum_task owns that transport and is very likely
+            // parked inside esp_transport_read() on it right now.
+            stratum_request_close(GLOBAL_STATE);
             continue;
         }
 
@@ -512,18 +634,24 @@ static void handle_dual_pool_message(GlobalState *GLOBAL_STATE, int pool_id, Str
         pool->new_version_rolling_msg = true;
     } else if (message->method == MINING_SET_EXTRANONCE ||
             message->method == STRATUM_RESULT_SUBSCRIBE) {
+        // create_jobs_task reads extranonce_str under stratum_work_lock; the
+        // swap and the free have to happen under it too, or that reader can be
+        // left holding a pointer we just handed back to the allocator.
+        pthread_mutex_lock(&GLOBAL_STATE->stratum_work_lock);
         char *old_extranonce = pool->extranonce_str;
         pool->extranonce_str = message->extranonce_str;
         pool->extranonce_2_len = message->extranonce_2_len;
         message->extranonce_str = NULL;
+        pthread_mutex_unlock(&GLOBAL_STATE->stratum_work_lock);
         free(old_extranonce);
     } else if (message->method == MINING_PING) {
-        taskENTER_CRITICAL(&pool->mux);
-        esp_transport_handle_t transport = pool->transport;
-        taskEXIT_CRITICAL(&pool->mux);
-        if (transport != NULL) {
-            STRATUM_V1_pong(transport, message->message_id);
+        // Pin the transport for the write; we are on the worker task, so this
+        // can only contend with a share submit, never with our own teardown.
+        pthread_mutex_lock(&pool->transport_lock);
+        if (pool->transport != NULL) {
+            STRATUM_V1_pong(pool->transport, message->message_id);
         }
+        pthread_mutex_unlock(&pool->transport_lock);
     } else if (message->method == CLIENT_RECONNECT) {
         ESP_LOGE(TAG, "%s pool requested client reconnect", pool_label(pool_id));
         stratum_close_pool_connection(GLOBAL_STATE, pool_id);
@@ -614,17 +742,22 @@ static void stratum_dual_pool_worker(void *pvParameters)
         }
 
         set_socket_options(transport);
+        // Clear the close flag before publishing: a request that lands after
+        // this point sets it again and shuts the fd down, so it cannot be lost.
         taskENTER_CRITICAL(&pool->mux);
-        pool->transport = transport;
         pool->connected = true;
         pool->close_requested = false;
         taskEXIT_CRITICAL(&pool->mux);
+        conn_publish(&pool->transport_lock, &pool->transport, &pool->transport_fd, transport);
 
         ESP_LOGI(TAG, "Connected %s pool to %s:%d", pool_label(pool_id), stratum_url, port);
 
         stratum_reset_pool_uid(GLOBAL_STATE, pool_id);
         invalidate_pool_work(GLOBAL_STATE, pool_id);
 
+        // Held across the whole handshake so a share submit can't interleave
+        // its write between our setup messages.
+        pthread_mutex_lock(&pool->transport_lock);
         STRATUM_V1_configure_version_rolling(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), &pool->version_mask);
         STRATUM_V1_subscribe(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), GLOBAL_STATE->asic_model_str);
         STRATUM_V1_authorize(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), pool_user(GLOBAL_STATE, pool_id), pool_pass(GLOBAL_STATE, pool_id));
@@ -634,6 +767,7 @@ static void stratum_dual_pool_worker(void *pvParameters)
             STRATUM_V1_suggest_difficulty(transport, stratum_get_next_pool_uid(GLOBAL_STATE, pool_id), STRATUM_DIFFICULTY);
         }
 #endif
+        pthread_mutex_unlock(&pool->transport_lock);
 
         taskENTER_CRITICAL(&pool->mux);
         pool->first_share_uid = pool->send_uid;
@@ -659,7 +793,7 @@ static void stratum_dual_pool_worker(void *pvParameters)
 
             bool closed = false;
             taskENTER_CRITICAL(&pool->mux);
-            closed = pool->transport == NULL || pool->close_requested;
+            closed = pool->close_requested;
             taskEXIT_CRITICAL(&pool->mux);
 
             STRATUM_V1_reset_message(&message);
@@ -755,8 +889,10 @@ void stratum_task(void * pvParameters)
         tls = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_tls : GLOBAL_STATE->SYSTEM_MODULE.pool_tls;
         cert = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_cert : GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
 
-        GLOBAL_STATE->transport = STRATUM_V1_transport_init(tls, cert);
-        if (GLOBAL_STATE->transport == NULL) {
+        // Kept local until the connection is up: publishing early would let
+        // ASIC_result_task write shares into a transport that isn't connected.
+        esp_transport_handle_t transport = STRATUM_V1_transport_init(tls, cert);
+        if (transport == NULL) {
             ESP_LOGE(TAG, "Transport initialization failed.");
             if (++retry_critical_attempts > MAX_CRITICAL_RETRY_ATTEMPTS) {
                 ESP_LOGE(TAG, "Max retry attempts reached, restarting...");
@@ -768,21 +904,23 @@ void stratum_task(void * pvParameters)
         retry_critical_attempts = 0;
 
         if (tls != DISABLED) {
-            esp_transport_ssl_set_common_name(GLOBAL_STATE->transport, stratum_url);
+            esp_transport_ssl_set_common_name(transport, stratum_url);
         }
         ESP_LOGI(TAG, "Transport initialized, connecting to %s:%d (%s)", stratum_url, port, conn_info.host_ip);
-        esp_err_t ret = esp_transport_connect(GLOBAL_STATE->transport, conn_info.host_ip, port, TRANSPORT_TIMEOUT_MS);
+        esp_err_t ret = esp_transport_connect(transport, conn_info.host_ip, port, TRANSPORT_TIMEOUT_MS);
         if (ret != ESP_OK) {
             retry_attempts++;
             ESP_LOGE(TAG, "Transport unable to connect to %s:%d (errno %d). Attempt: %d", stratum_url, port, ret, retry_attempts);
-            esp_transport_close(GLOBAL_STATE->transport);
-            esp_transport_destroy(GLOBAL_STATE->transport);
-            GLOBAL_STATE->transport = NULL;
+            esp_transport_close(transport);
+            esp_transport_destroy(transport);
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             continue;
         }
 
-        set_socket_options(GLOBAL_STATE->transport);
+        set_socket_options(transport);
+        GLOBAL_STATE->close_requested = false;
+        conn_publish(&GLOBAL_STATE->transport_lock, &GLOBAL_STATE->transport,
+                     &GLOBAL_STATE->transport_fd, transport);
 
         const char *tls_status;
         switch (tls) {
@@ -796,25 +934,30 @@ void stratum_task(void * pvParameters)
         stratum_reset_uid(GLOBAL_STATE);
         cleanQueue(GLOBAL_STATE);
 
-        ///// Start Stratum Action
-        // mining.configure - ID: 1
-        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), &GLOBAL_STATE->version_mask);
-
-        // mining.subscribe - ID: 2
-        STRATUM_V1_subscribe(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), GLOBAL_STATE->asic_model_str);
-
         char * username = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
         char * password = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_pass : GLOBAL_STATE->SYSTEM_MODULE.pool_pass;
 
+        ///// Start Stratum Action
+        // Held across the whole handshake so a share submit can't interleave
+        // its write between our setup messages.
+        pthread_mutex_lock(&GLOBAL_STATE->transport_lock);
+
+        // mining.configure - ID: 1
+        STRATUM_V1_configure_version_rolling(transport, stratum_get_next_uid(GLOBAL_STATE), &GLOBAL_STATE->version_mask);
+
+        // mining.subscribe - ID: 2
+        STRATUM_V1_subscribe(transport, stratum_get_next_uid(GLOBAL_STATE), GLOBAL_STATE->asic_model_str);
+
         //mining.authorize - ID: 3
-        STRATUM_V1_authorize(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), username, password);
+        STRATUM_V1_authorize(transport, stratum_get_next_uid(GLOBAL_STATE), username, password);
 
 #ifdef CONFIG_STRATUM_SUGGEST_DIFFICULTY
         if (STRATUM_DIFFICULTY > 0) {
             // mining.suggest_difficulty - optional; some pools reject this method.
-            STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, stratum_get_next_uid(GLOBAL_STATE), STRATUM_DIFFICULTY);
+            STRATUM_V1_suggest_difficulty(transport, stratum_get_next_uid(GLOBAL_STATE), STRATUM_DIFFICULTY);
         }
 #endif
+        pthread_mutex_unlock(&GLOBAL_STATE->transport_lock);
 
         // The next uid that will be issued belongs to a share submission.
         // Used by the dispatcher below to distinguish setup-message replies
@@ -827,10 +970,19 @@ void stratum_task(void * pvParameters)
         GLOBAL_STATE->abandon_work = 0;
 
         while (1) {
-            char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->transport);
+            // `transport` is this task's own handle: we are the only task that
+            // may destroy it, so it cannot go away while we are parked in here.
+            char * line = STRATUM_V1_receive_jsonrpc_line(transport);
             if (!line) {
                 ESP_LOGE(TAG, "Failed to receive JSON-RPC line, reconnecting...");
                 retry_attempts++;
+                stratum_close_connection(GLOBAL_STATE);
+                break;
+            }
+
+            if (GLOBAL_STATE->close_requested) {
+                ESP_LOGI(TAG, "Close requested, dropping connection");
+                free(line);
                 stratum_close_connection(GLOBAL_STATE);
                 break;
             }
@@ -872,13 +1024,25 @@ void stratum_task(void * pvParameters)
                 GLOBAL_STATE->new_stratum_version_rolling_msg = true;
             } else if (stratum_api_v1_message.method == MINING_SET_EXTRANONCE ||
                     stratum_api_v1_message.method == STRATUM_RESULT_SUBSCRIBE) {
+                // create_jobs_task snapshots extranonce_str under
+                // stratum_work_lock; the swap and the free have to happen under
+                // it too, or that reader can be left holding a pointer we just
+                // handed back to the allocator.
+                pthread_mutex_lock(&GLOBAL_STATE->stratum_work_lock);
                 char *old_extranonce = GLOBAL_STATE->extranonce_str;
                 GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
                 GLOBAL_STATE->extranonce_2_len = stratum_api_v1_message.extranonce_2_len;
                 stratum_api_v1_message.extranonce_str = NULL;
+                pthread_mutex_unlock(&GLOBAL_STATE->stratum_work_lock);
                 free(old_extranonce);
             } else if (stratum_api_v1_message.method == MINING_PING) {
-                STRATUM_V1_pong(GLOBAL_STATE->transport, stratum_api_v1_message.message_id);
+                // Pin the transport for the write; we are the owning task, so
+                // this can only contend with a share submit.
+                pthread_mutex_lock(&GLOBAL_STATE->transport_lock);
+                if (GLOBAL_STATE->transport != NULL) {
+                    STRATUM_V1_pong(GLOBAL_STATE->transport, stratum_api_v1_message.message_id);
+                }
+                pthread_mutex_unlock(&GLOBAL_STATE->transport_lock);
             } else if (stratum_api_v1_message.method == CLIENT_RECONNECT) {
                 ESP_LOGE(TAG, "Pool requested client reconnect...");
                 stratum_close_connection(GLOBAL_STATE);
