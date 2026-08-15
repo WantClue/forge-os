@@ -432,8 +432,11 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             message->method = STRATUM_UNKNOWN;
             goto done;
         }
+        // mining.notify is a fixed 9-element array: job_id, prevhash, coinb1,
+        // coinb2, merkle_branch, version, nbits, ntime, clean_jobs. Accepting 8
+        // let a truncated notify through with no clean_jobs flag at all.
         int params_count = cJSON_GetArraySize(params);
-        if (params_count < 8) {
+        if (params_count < 9) {
             ESP_LOGE(TAG, "Not enough params in mining.notify: %d", params_count);
             message->method = STRATUM_UNKNOWN;
             goto done;
@@ -515,7 +518,17 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         new_work->target = strtoul(target_str, NULL, 16);
         new_work->ntime = strtoul(ntime_str, NULL, 16);
 
-        new_work->clean_jobs = cJSON_IsTrue(cJSON_GetArrayItem(params, params_count - 1));
+        // clean_jobs is params[8] by spec. Reading the *last* element instead
+        // meant an 8-element notify picked up ntime, and any pool or proxy that
+        // appends fields shifted the read off the real flag.
+        cJSON * clean_jobs_item = cJSON_GetArrayItem(params, 8);
+        if (!cJSON_IsBool(clean_jobs_item)) {
+            // Default to false rather than rejecting: false means "keep the
+            // work you have", so a sloppy pool costs us one stale-work cleanup
+            // instead of stopping mining altogether.
+            ESP_LOGW(TAG, "Non-boolean clean_jobs in mining.notify, assuming false");
+        }
+        new_work->clean_jobs = cJSON_IsTrue(clean_jobs_item);
 
         message->mining_notification = new_work;
     } else if (message->method == MINING_SET_DIFFICULTY) {
