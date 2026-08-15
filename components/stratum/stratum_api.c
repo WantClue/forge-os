@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #define TRANSPORT_TIMEOUT_MS 5000
 #define BUFFER_SIZE 1024
@@ -270,6 +271,18 @@ static const char * json_array_string(const cJSON * array, int index)
     return item->valuestring;
 }
 
+static bool json_is_integer(const cJSON * item)
+{
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    double value = item->valuedouble;
+    if (value < (double)INT_MIN || value > (double)INT_MAX) {
+        return false;
+    }
+    return value == (double)(int)value;
+}
+
 void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 {
     STRATUM_V1_reset_message(message);
@@ -285,7 +298,11 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 
     cJSON * id_json = cJSON_GetObjectItem(json, "id");
     int parsed_id = -1;
-    if (id_json != NULL && cJSON_IsNumber(id_json)) {
+    // Integral check matters here too: message_id selects the subscribe-result
+    // branch below and separates setup replies from share replies, so a
+    // fractional id truncating onto a real one would misroute the message.
+    // A rejected id leaves -1, which is the same as a message carrying no id.
+    if (json_is_integer(id_json)) {
         parsed_id = id_json->valueint;
     }
     message->message_id = parsed_id;
@@ -357,7 +374,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             result = STRATUM_RESULT_SUBSCRIBE;
 
             cJSON * extranonce2_len_json = cJSON_GetArrayItem(result_json, 2);
-            if (!cJSON_IsNumber(extranonce2_len_json)) {
+            if (!json_is_integer(extranonce2_len_json)) {
                 ESP_LOGE(TAG, "Unable to parse extranonce2_len: %s", stratum_json);
                 message->response_success = false;
                 goto done;
@@ -525,7 +542,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * params = cJSON_GetObjectItem(json, "params");
         cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
         cJSON * p1 = params ? cJSON_GetArrayItem(params, 1) : NULL;
-        if (!cJSON_IsString(p0) || !cJSON_IsNumber(p1)) {
+        if (!cJSON_IsString(p0) || !json_is_integer(p1)) {
             ESP_LOGE(TAG, "Invalid params in mining.set_extranonce");
             message->method = STRATUM_UNKNOWN;
             goto done;
