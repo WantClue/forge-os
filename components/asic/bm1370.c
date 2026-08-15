@@ -414,6 +414,11 @@ static void _reset(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
+void BM1370_hold_reset_low(void)
+{
+    gpio_set_level(GPIO_ASIC_RESET, 0);
+}
+
 // static void _send_read_address(void)
 // {
 

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "asic_task.h"
 #include "bm1370.h"
 #include "common.h"
@@ -40,6 +41,14 @@ typedef enum
     ASIC_UNKNOWN = -1,
     ASIC_BM1370,
 } AsicModel;
+
+typedef enum
+{
+    MINING_STATE_MINING = 0,
+    MINING_STATE_PAUSING,
+    MINING_STATE_PAUSED,
+    MINING_STATE_RESUMING,
+} MiningState;
 
 // typedef struct
 // {
@@ -96,6 +105,8 @@ typedef struct
     uint16_t pool_balance;
     char pool_connection_info[64];
     uint16_t overheat_mode;
+    volatile bool mining_paused;
+    volatile MiningState mining_state;
     uint16_t power_fault;
     uint32_t lastClockSync;
     bool is_firmware_update;
@@ -169,6 +180,8 @@ typedef struct
     portMUX_TYPE stratum_mux;
 
     bool ASIC_initalized;
+    bool mining_control_ready;
+    TaskHandle_t power_management_task_handle;
     bool psram_is_available;
 } GlobalState;
 

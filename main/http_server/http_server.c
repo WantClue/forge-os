@@ -736,6 +736,86 @@ static esp_err_t POST_restart(httpd_req_t * req)
     return ESP_OK;
 }
 
+static const char * mining_state_name(MiningState state)
+{
+    switch (state) {
+        case MINING_STATE_PAUSING:
+            return "pausing";
+        case MINING_STATE_PAUSED:
+            return "paused";
+        case MINING_STATE_RESUMING:
+            return "resuming";
+        case MINING_STATE_MINING:
+        default:
+            return "mining";
+    }
+}
+
+static esp_err_t set_mining_paused(httpd_req_t * req, bool paused)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (!GLOBAL_STATE->mining_control_ready) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        httpd_resp_set_type(req, "application/json");
+        return httpd_resp_sendstr(req, "{\"message\":\"Mining subsystem is not ready\"}");
+    }
+
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    SystemModule * system = &GLOBAL_STATE->SYSTEM_MODULE;
+    system->mining_paused = paused;
+    if (paused) {
+        if (system->mining_state != MINING_STATE_PAUSED) {
+            system->mining_state = MINING_STATE_PAUSING;
+        }
+    } else if (system->mining_state != MINING_STATE_MINING) {
+        system->mining_state = MINING_STATE_RESUMING;
+    }
+
+    if (GLOBAL_STATE->power_management_task_handle != NULL) {
+        xTaskNotifyGive(GLOBAL_STATE->power_management_task_handle);
+    }
+
+    ESP_LOGI(TAG, "Mining %s by API request", paused ? "pause requested" : "resume requested");
+
+    cJSON * root = cJSON_CreateObject();
+    if (root == NULL) {
+        return httpd_resp_send_500(req);
+    }
+
+    cJSON_AddStringToObject(root, "message",
+                            paused ? "Mining pause requested" : "Mining resume requested");
+    cJSON_AddBoolToObject(root, "miningPaused", paused);
+    cJSON_AddStringToObject(root, "miningState", mining_state_name(system->mining_state));
+
+    char * response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (response == NULL) {
+        return httpd_resp_send_500(req);
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t result = httpd_resp_sendstr(req, response);
+    free(response);
+    return result;
+}
+
+static esp_err_t POST_mining_pause(httpd_req_t * req)
+{
+    return set_mining_paused(req, true);
+}
+
+static esp_err_t POST_mining_resume(httpd_req_t * req)
+{
+    return set_mining_paused(req, false);
+}
+
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t * req)
 {
@@ -773,7 +853,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON * root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
-    cJSON_AddNumberToObject(root, "current", Power_get_current(GLOBAL_STATE));
+    cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
     cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp_avg);
     cJSON_AddNumberToObject(root, "vrTemp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.vr_temp);
     cJSON_AddNumberToObject(root, "maxPower", Power_get_max_settings(GLOBAL_STATE));
@@ -853,6 +933,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddStringToObject(root, "runningPartition", esp_ota_get_running_partition()->label);
 
     cJSON_AddNumberToObject(root, "overheat_mode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0));
+    cJSON_AddBoolToObject(root, "miningPaused", GLOBAL_STATE->SYSTEM_MODULE.mining_paused);
+    cJSON_AddStringToObject(root, "miningState",
+                           mining_state_name(GLOBAL_STATE->SYSTEM_MODULE.mining_state));
     cJSON_AddNumberToObject(root, "overclockEnabled", nvs_config_get_u16(NVS_CONFIG_OVERCLOCK_ENABLED, 0));
 
     cJSON_AddNumberToObject(root, "autofanspeed", nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1));
@@ -1348,6 +1431,22 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_uri_t system_restart_options_uri = {
         .uri = "/api/system/restart", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
     httpd_register_uri_handler(server, &system_restart_options_uri);
+
+    httpd_uri_t system_mining_pause_uri = {
+        .uri = "/api/system/pause", .method = HTTP_POST, .handler = POST_mining_pause, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &system_mining_pause_uri);
+
+    httpd_uri_t system_mining_pause_options_uri = {
+        .uri = "/api/system/pause", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
+    httpd_register_uri_handler(server, &system_mining_pause_options_uri);
+
+    httpd_uri_t system_mining_resume_uri = {
+        .uri = "/api/system/resume", .method = HTTP_POST, .handler = POST_mining_resume, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &system_mining_resume_uri);
+
+    httpd_uri_t system_mining_resume_options_uri = {
+        .uri = "/api/system/resume", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
+    httpd_register_uri_handler(server, &system_mining_resume_options_uri);
 
     httpd_uri_t update_system_settings_uri = {
         .uri = "/api/system", .method = HTTP_PATCH, .handler = PATCH_update_settings, .user_ctx = rest_context};

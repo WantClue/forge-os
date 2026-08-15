@@ -151,7 +151,8 @@ void app_main(void)
 
     SYSTEM_init_peripherals(&GLOBAL_STATE);
 
-    xTaskCreate(POWER_MANAGEMENT_task, "power management", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+    xTaskCreate(POWER_MANAGEMENT_task, "power management", 8192, (void *) &GLOBAL_STATE, 10,
+                &GLOBAL_STATE.power_management_task_handle);
 
     //start the API for AxeOS
     start_rest_server((void *) &GLOBAL_STATE);
@@ -208,6 +209,7 @@ void app_main(void)
     SERIAL_clear_buffer();
 
     GLOBAL_STATE.ASIC_initalized = true;
+    GLOBAL_STATE.mining_control_ready = true;
 
     xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
     xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);

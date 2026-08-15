@@ -15,6 +15,7 @@
 #include "power.h"
 #include "asic.h"
 #include "adc.h"
+#include "hashrate_monitor_task.h"
 
 #define POLL_RATE 2000
 #define MAX_TEMP 90.0
@@ -27,10 +28,106 @@
 
 #define TPS546_THROTTLE_TEMP 105.0
 #define TPS546_MAX_TEMP 145.0
+#define PAUSED_FAN_SPEED 30.0
 
 static const char * TAG = "power_management";
 
 static bool even = false;
+
+static void update_input_telemetry(GlobalState * GLOBAL_STATE)
+{
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+
+    power_management->voltage = Power_get_input_voltage(GLOBAL_STATE);
+    power_management->current = Power_get_current(GLOBAL_STATE);
+    power_management->power = Power_get_power(GLOBAL_STATE);
+}
+
+static void update_paused_telemetry(GlobalState * GLOBAL_STATE)
+{
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+
+    update_input_telemetry(GLOBAL_STATE);
+
+    PAC9544_selectChannel(even + 2U);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    power_management->vr_temp = Power_get_vreg_temp(GLOBAL_STATE);
+    power_management->fan_rpm[even] = Thermal_getFanSpeed();
+
+    // ASIC thermal diodes are not valid while VCORE is disabled.
+    power_management->chip_temp[0] = 0.0f;
+    power_management->chip_temp[1] = 0.0f;
+    power_management->chip_temp_avg = 0.0f;
+
+    even = !even;
+}
+
+static void mining_stop(GlobalState * GLOBAL_STATE)
+{
+    ESP_LOGI(TAG, "Stopping mining");
+
+    // Stop the worker tasks before changing the ASIC clock and power state.
+    GLOBAL_STATE->ASIC_initalized = false;
+    hashrate_monitor_reset(GLOBAL_STATE);
+
+    // Match AxeOS: wind the chain down before switching off the TPS546 output.
+    if (!ASIC_set_frequency(GLOBAL_STATE, 50.0f)) {
+        ESP_LOGW(TAG, "Unable to reduce ASIC frequency before pause");
+    }
+
+    if (VCORE_set_voltage(0.0f, GLOBAL_STATE) != ESP_OK) {
+        ESP_LOGE(TAG, "Unable to turn off ASIC core voltage");
+    }
+    ASIC_hold_reset_low(GLOBAL_STATE);
+
+    // Let in-flight UART work finish, then discard stale bytes.
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+    SERIAL_clear_buffer();
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    hashrate_monitor_reset(GLOBAL_STATE);
+    GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc = PAUSED_FAN_SPEED;
+    Thermal_setFanSpeedPercent(PAUSED_FAN_SPEED / 100.0f);
+
+    ESP_LOGI(TAG, "Mining stopped");
+}
+
+static bool mining_start(GlobalState * GLOBAL_STATE)
+{
+    ESP_LOGI(TAG, "Starting mining");
+
+    uint16_t voltage = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
+    if (VCORE_set_voltage((double) voltage / 1000.0, GLOBAL_STATE) != ESP_OK) {
+        ESP_LOGE(TAG, "Unable to restore ASIC core voltage");
+        return false;
+    }
+
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+
+    // A freshly reset BM1370 chain starts at the default UART baud.
+    SERIAL_set_baud(115200);
+    SERIAL_clear_buffer();
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    uint8_t chip_count = ASIC_init(GLOBAL_STATE);
+    if (chip_count == 0) {
+        ESP_LOGE(TAG, "Mining resume failed: ASIC chain not detected");
+        ASIC_hold_reset_low(GLOBAL_STATE);
+        VCORE_set_voltage(0.0f, GLOBAL_STATE);
+        return false;
+    }
+
+    SERIAL_set_baud(ASIC_set_max_baud(GLOBAL_STATE));
+    SERIAL_clear_buffer();
+
+    // ASIC counters restart with the chain. Discard every pre-pause baseline
+    // before register polling is allowed to resume.
+    hashrate_monitor_reset(GLOBAL_STATE);
+    GLOBAL_STATE->ASIC_initalized = true;
+
+    ESP_LOGI(TAG, "Mining started successfully (%u chip(s))", chip_count);
+    return true;
+}
 
 // Set the fan speed between 35% min and 100% max based on ASIC and VR temperatures.
 // Uses the higher of the two temperature-based fan speed requirements.
@@ -102,13 +199,45 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     vTaskDelay(500 / portTICK_PERIOD_MS);
     uint16_t last_core_voltage = 0.0;
     uint16_t last_asic_frequency = power_management->frequency_value;
+    bool is_user_paused = false;
     
     while (1) {
+        if (sys_module->mining_paused && !is_user_paused) {
+            sys_module->mining_state = MINING_STATE_PAUSING;
+            mining_stop(GLOBAL_STATE);
+            is_user_paused = true;
+            if (!sys_module->mining_paused) {
+                sys_module->mining_state = MINING_STATE_RESUMING;
+                continue;
+            }
+            sys_module->mining_state = MINING_STATE_PAUSED;
+        } else if (!sys_module->mining_paused && is_user_paused) {
+            sys_module->mining_state = MINING_STATE_RESUMING;
+            if (mining_start(GLOBAL_STATE)) {
+                is_user_paused = false;
+                if (sys_module->mining_paused) {
+                    sys_module->mining_state = MINING_STATE_PAUSING;
+                    continue;
+                }
+                sys_module->mining_state = MINING_STATE_MINING;
+            } else {
+                // Keep the externally visible state honest if recovery fails.
+                sys_module->mining_paused = true;
+                sys_module->mining_state = MINING_STATE_PAUSED;
+            }
+        }
+
+        if (is_user_paused) {
+            // Keep board-level telemetry live while the ASIC rail is off.
+            update_paused_telemetry(GLOBAL_STATE);
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(POLL_RATE));
+            continue;
+        }
+
         PAC9544_selectChannel(even + 2U);
         vTaskDelay(pdMS_TO_TICKS(10)); // Allow PAC9544 channel switch to settle
 
-        power_management->voltage = Power_get_input_voltage(GLOBAL_STATE);
-        power_management->power = Power_get_power(GLOBAL_STATE);
+        update_input_telemetry(GLOBAL_STATE);
         #ifdef POWER_DEBUG
         ESP_LOGI(TAG, "POWER: %f", power_management->power);
         #endif
@@ -221,7 +350,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
         VCORE_check_fault(GLOBAL_STATE);
         even = !even;
-        // looper:
-        vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
+        // API pause/resume requests wake this task without shortening sensor polling.
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(POLL_RATE));
     }
 }
