@@ -24,8 +24,6 @@
 #include "adc.h"
 #include "connect.h"
 #include "nvs_config.h"
-#include "display.h"
-#include "input.h"
 #include "vcore.h"
 #include "ThermalMonitoring.h"
 
