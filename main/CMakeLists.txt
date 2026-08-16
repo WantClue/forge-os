@@ -9,7 +9,6 @@ SRCS
     "system.c"
     "work_queue.c"
     "./NvsManager/src/nvs_device.c"
-    "lv_font_portfolio-6x8.c"
     "./http_server/http_server.c"
     "./http_server/handler_ota_github.c"
     "./self_test/self_test.c"
@@ -67,9 +66,6 @@ EMBED_FILES
     "http_server/recovery_page.html"
     "http_server/ap_page.html"
 )
-
-idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_INCLUDE_SIMPLE=1" APPEND)
-idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_PATH=\"${CMAKE_SOURCE_DIR}/main/lv_conf.h\"" APPEND)
 
 set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/http_server/forge-os")
 

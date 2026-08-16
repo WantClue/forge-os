@@ -12,7 +12,6 @@
 #include "adc.h"
 #include "nvs_config.h"
 #include "nvs_flash.h"
-#include "display.h"
 #include "input.h"
 #include "vcore.h"
 #include "utils.h"
@@ -33,8 +32,8 @@
  * LED Pattern              | Status            | Cause
  * -------------------------|-------------------|----------------------------------
  * LED1,LED2: ON BLINKING   | PASS              | All tests passed successfully
- * LED1: ON,  LED2: OFF     | PERIPHERAL_FAILURE| PSRAM, Display, Input, or 
- *                          |                   | Peripheral initialization failed
+ * LED1: ON,  LED2: OFF     | PERIPHERAL_FAILURE| PSRAM, Input, or Peripheral
+ *                          |                   | initialization failed
  * LED1: OFF, LED2: ON      | ASIC_FAILURE      | ASIC detection, hashrate, or
  *                          |                   | reference voltage test failed
  * LED1: ON,  LED2: ON      | POWER_FAILURE     | Voltage regulator or power
@@ -120,14 +119,9 @@ bool production_test(GlobalState * GLOBAL_STATE) {
     return false;
 }
 
-static void reset_self_test() {
+static void reset_self_test(void) {
     ESP_LOGI(TAG, "Long press detected...");
     xSemaphoreGive(BootSemaphore);
-}
-
-static void display_msg(char * msg, GlobalState * GLOBAL_STATE) 
-{
-    GLOBAL_STATE->SELF_TEST_MODULE.message = msg;
 }
 
 static esp_err_t test_fan_sense(GlobalState * GLOBAL_STATE)
@@ -179,14 +173,14 @@ static esp_err_t test_reference_voltages(GlobalState * GLOBAL_STATE)
 {
     uint16_t _1V2_voltage = ADC_read(V_1V2_REF, GLOBAL_STATE);
     ESP_LOGI(TAG, "1V2 reference voltage: %u", _1V2_voltage); 
-    if (_1V2_voltage < REFERENCE_VOLTAGE_1V2_MIN && _1V2_voltage > REFERENCE_VOLTAGE_1V2_MAX) {
+    if (_1V2_voltage < REFERENCE_VOLTAGE_1V2_MIN || _1V2_voltage > REFERENCE_VOLTAGE_1V2_MAX) {
         ESP_LOGE(TAG, "1V2 reference voltage TEST FAIL, INCORRECT REFERENCE VOLTAGE");
         return ESP_FAIL;
     }
 
     uint16_t _0V8_voltage = ADC_read(V_0V8_REF, GLOBAL_STATE);
     ESP_LOGI(TAG, "0V8 reference voltage: %u", _0V8_voltage);
-    if (_0V8_voltage < REFERENCE_VOLTAGE_0V8_MIN && _0V8_voltage > REFERENCE_VOLTAGE_0V8_MAX) {
+    if (_0V8_voltage < REFERENCE_VOLTAGE_0V8_MIN || _0V8_voltage > REFERENCE_VOLTAGE_0V8_MAX) {
         ESP_LOGE(TAG, "0V8 reference voltage TEST FAIL, INCORRECT REFERENCE VOLTAGE");
         return ESP_FAIL;
     }
@@ -281,7 +275,6 @@ esp_err_t test_init_peripherals(GlobalState * GLOBAL_STATE) {
 esp_err_t test_psram(GlobalState * GLOBAL_STATE){
     if(!esp_psram_is_initialized()) {
         ESP_LOGE(TAG, "No PSRAM available on ESP32!");
-        //display_msg("PSRAM:FAIL", GLOBAL_STATE);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -301,21 +294,25 @@ void execute_production_test(void * pvParameters)
 
     ESP_LOGI(TAG, "Running Self Tests");
 
-    if (configure_led() != ESP_OK) {
-        ESP_LOGE(TAG, "LED config failed!");
-        tests_done(GLOBAL_STATE, TESTS_FAILED, PERIPHERAL_FAILURE);
-    }
-
-    GLOBAL_STATE->SELF_TEST_MODULE.active = true;
-
-    // Create a binary semaphore
+    // Create a binary semaphore. Has to exist before the first tests_done() call,
+    // which blocks on it forever when a test fails.
     BootSemaphore = xSemaphoreCreateBinary();
-
-    gpio_install_isr_service(0);
 
     if (BootSemaphore == NULL) {
         ESP_LOGE(TAG, "Failed to create semaphore");
         return;
+    }
+
+    gpio_install_isr_service(0);
+
+    // A long press on the boot button is the only way out of a failed self test
+    if (input_init(NULL, reset_self_test) != ESP_OK) {
+        ESP_LOGE(TAG, "Input init failed!");
+    }
+
+    if (configure_led() != ESP_OK) {
+        ESP_LOGE(TAG, "LED config failed!");
+        tests_done(GLOBAL_STATE, TESTS_FAILED, PERIPHERAL_FAILURE);
     }
 
     //Run PSRAM test
@@ -383,9 +380,6 @@ void execute_production_test(void * pvParameters)
     //test for voltage regulator faults
     if (test_vreg_faults(GLOBAL_STATE) != ESP_OK) {
         ESP_LOGE(TAG, "VCORE check fault failed!");
-        char error_buf[20];
-        snprintf(error_buf, 20, "VCORE:PWR FAULT");
-        //display_msg(error_buf, GLOBAL_STATE);
         tests_done(GLOBAL_STATE, TESTS_FAILED, POWER_FAILURE);
     }
 
@@ -467,19 +461,38 @@ void execute_production_test(void * pvParameters)
     ESP_LOGI(TAG, "Measuring hashrate for 5 seconds...");
     while (duration_ms < hashtest_ms) {
         task_result * asic_result = ASIC_process_work(GLOBAL_STATE);
-        if (asic_result != NULL) {
-            // check the nonce difficulty
-            double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
-            counter += 8;  // DIFFICULTY = 8 (matches ESP-Miner-WantClue)
-            duration_ms = (esp_timer_get_time() / 1000) - start_ms;
-            hashrate = hash_counter_to_ghs(duration_ms, counter);
 
-            // Log every 50 nonces to avoid watchdog
-            if ((counter / 8) % 50 == 0) {
-                ESP_LOGI(TAG, "Nonce %lu diff %.2f", (unsigned long)asic_result->nonce, nonce_diff);
-                ESP_LOGI(TAG, "%.2f GH/s, duration %"PRIu32"ms", hashrate, duration_ms);
-            }
+        // The clock has to advance whether or not a nonce came back. With dead
+        // chips or a dead serial link ASIC_process_work only ever returns NULL,
+        // and updating this inside the success branch left the loop spinning
+        // forever instead of reporting a hashrate failure.
+        duration_ms = (esp_timer_get_time() / 1000) - start_ms;
+
+        if (asic_result == NULL) {
+            // A chain returning only malformed frames makes receive_work return
+            // without blocking, so yield to keep the idle task fed.
+            vTaskDelay(1);
+            continue;
         }
+
+        // check the nonce difficulty
+        double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
+        counter += 8;  // DIFFICULTY = 8 (matches ESP-Miner-WantClue)
+        hashrate = hash_counter_to_ghs(duration_ms, counter);
+
+        // Log every 50 nonces to avoid watchdog
+        if ((counter / 8) % 50 == 0) {
+            ESP_LOGI(TAG, "Nonce %lu diff %.2f", (unsigned long)asic_result->nonce, nonce_diff);
+            ESP_LOGI(TAG, "%.2f GH/s, duration %"PRIu32"ms", hashrate, duration_ms);
+        }
+    }
+
+    // Recompute against the final duration so a nonce arriving early in the
+    // window doesn't leave an optimistic hashrate behind.
+    hashrate = (duration_ms > 0) ? hash_counter_to_ghs(duration_ms, counter) : 0.0f;
+
+    if (counter == 0) {
+        ESP_LOGE(TAG, "No nonces received from ASICs during hashrate test");
     }
 
     vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -499,7 +512,7 @@ void execute_production_test(void * pvParameters)
     ESP_LOGI(TAG, "Hashrate: %.2f, Expected: %.2f", hashrate, expected_hashrate_ghs);
 
     if (hashrate < expected_hashrate_ghs) {
-        display_msg("HASHRATE:FAIL", GLOBAL_STATE);
+        ESP_LOGE(TAG, "Hashrate test failed!");
         tests_done(GLOBAL_STATE, TESTS_FAILED, ASIC_FAILURE);
     }
 
@@ -527,8 +540,6 @@ void execute_production_test(void * pvParameters)
 static void tests_done(GlobalState * GLOBAL_STATE, bool test_result, TEST_FAILED_CAUSE cause) 
 {
 
-    GLOBAL_STATE->SELF_TEST_MODULE.result = test_result;
-    GLOBAL_STATE->SELF_TEST_MODULE.finished = true;
     Power_disable(GLOBAL_STATE);
 
     if (test_result == TESTS_FAILED) {

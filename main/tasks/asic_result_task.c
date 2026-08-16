@@ -83,46 +83,31 @@ void ASIC_result_task(void *pvParameters)
                 continue;
             }
 
-            // Snapshot transport + uid atomically so stratum_close_connection can't
-            // destroy the transport between the read here and the write below.
-            esp_transport_handle_t transport = NULL;
-            int uid = 0;
-            if (GLOBAL_STATE->SYSTEM_MODULE.pool_mode == POOL_MODE_DUAL) {
-                StratumPoolState *pool = &GLOBAL_STATE->pools[pool_id];
-                taskENTER_CRITICAL(&pool->mux);
-                transport = pool->transport;
-                uid = pool->send_uid++;
-                taskEXIT_CRITICAL(&pool->mux);
-            } else {
-                taskENTER_CRITICAL(&GLOBAL_STATE->stratum_mux);
-                transport = GLOBAL_STATE->transport;
-                uid = GLOBAL_STATE->send_uid++;
-                taskEXIT_CRITICAL(&GLOBAL_STATE->stratum_mux);
-            }
-
             pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
 
-            int ret = 0;
-            if (transport == NULL) {
-                ESP_LOGW(TAG, "No transport available, dropping share");
-            } else {
-                ret = STRATUM_V1_submit_share(
-                    transport,
-                    uid,
-                    user,
-                    jobid,
-                    extranonce2,
-                    ntime,
-                    asic_result->nonce,
-                    version_bits);
+            // stratum_submit_share holds the transport pinned for the duration
+            // of the write, so the owning stratum task cannot destroy it
+            // mid-send. We never touch the handle ourselves.
+            int ret = stratum_submit_share(
+                GLOBAL_STATE,
+                pool_id,
+                user,
+                jobid,
+                extranonce2,
+                ntime,
+                asic_result->nonce,
+                version_bits);
 
-                if (ret < 0) {
-                    ESP_LOGI(TAG, "Unable to write share to socket. Closing connection. Ret: %d (errno %d: %s)", ret, errno, strerror(errno));
-                    if (GLOBAL_STATE->SYSTEM_MODULE.pool_mode == POOL_MODE_DUAL) {
-                        stratum_close_pool_connection(GLOBAL_STATE, pool_id);
-                    } else {
-                        stratum_close_connection(GLOBAL_STATE);
-                    }
+            if (ret == STRATUM_SUBMIT_NO_CONNECTION) {
+                ESP_LOGW(TAG, "No transport available, dropping share");
+            } else if (ret < 0) {
+                ESP_LOGI(TAG, "Unable to write share to socket. Closing connection. Ret: %d (errno %d: %s)", ret, errno, strerror(errno));
+                // Request only: the stratum task owns the transport and is
+                // blocked reading on it. It will do the actual teardown.
+                if (GLOBAL_STATE->SYSTEM_MODULE.pool_mode == POOL_MODE_DUAL) {
+                    stratum_request_pool_close(GLOBAL_STATE, pool_id);
+                } else {
+                    stratum_request_close(GLOBAL_STATE);
                 }
             }
             free(jobid);

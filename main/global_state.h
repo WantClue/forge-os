@@ -69,7 +69,6 @@ typedef struct
     uint64_t shares_rejected;
     RejectedReasonStat rejected_reason_stats[10];
     int rejected_reason_stats_count;
-    int screen_page;
     uint64_t best_nonce_diff;
     char best_diff_string[DIFF_STRING_SIZE];
     uint64_t best_session_nonce_diff;
@@ -99,7 +98,6 @@ typedef struct
     uint16_t overheat_mode;
     uint16_t power_fault;
     uint32_t lastClockSync;
-    bool is_screen_active;
     bool led_blink_enabled;
     bool is_firmware_update;
     char firmware_update_filename[20];
@@ -109,15 +107,9 @@ typedef struct
 
 typedef struct
 {
-    bool active;
-    char *message;
-    bool result;
-    bool finished;
-} SelfTestModule;
-
-typedef struct
-{
     esp_transport_handle_t transport;
+    pthread_mutex_t transport_lock;
+    int transport_fd;
     portMUX_TYPE mux;
     int send_uid;
     int first_share_uid;
@@ -157,7 +149,6 @@ typedef struct
     AsicTaskModule ASIC_TASK_MODULE;
     PowerManagementModule POWER_MANAGEMENT_MODULE;
     HashrateMonitorModule HASHRATE_MONITOR_MODULE;
-    SelfTestModule SELF_TEST_MODULE;
 
     char * extranonce_str;
     int extranonce_2_len;
@@ -170,14 +161,22 @@ typedef struct
     uint32_t version_mask;
     bool new_stratum_version_rolling_msg;
 
+    // Single-pool connection. Owned by stratum_task: only that task may close
+    // or destroy the transport. transport_lock guards both the handle and its
+    // socket fd; any other task must hold it for the whole time it touches
+    // either. See "transport ownership" in stratum_task.c.
     esp_transport_handle_t transport;
+    pthread_mutex_t transport_lock;
+    int transport_fd;
+    // Set by any task, cleared by stratum_task. volatile because the worker
+    // polls it outside any lock.
+    volatile bool close_requested;
 
     // A message ID that must be unique per request that expects a response.
     // For requests not expecting a response (called notifications), this is null.
     int send_uid;
 
-    // Guards send_uid and the transport pointer against the stratum/asic_result
-    // tasks racing on share submit vs. connection teardown.
+    // Guards send_uid.
     portMUX_TYPE stratum_mux;
 
     bool ASIC_initalized;
