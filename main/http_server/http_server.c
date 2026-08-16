@@ -725,7 +725,7 @@ static esp_err_t GET_system_led(httpd_req_t * req)
     }
 
     cJSON * root = cJSON_CreateObject();
-    cJSON_AddBoolToObject(root, "ledBlinkEnabled", GLOBAL_STATE->SYSTEM_MODULE.led_blink_enabled);
+    cJSON_AddBoolToObject(root, "ledBlinkEnabled", SYSTEM_get_led_blink_enabled(GLOBAL_STATE));
 
     const char * response = cJSON_Print(root);
     cJSON_Delete(root);
@@ -940,7 +940,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "overheat_mode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0));
     cJSON_AddNumberToObject(root, "overclockEnabled", nvs_config_get_u16(NVS_CONFIG_OVERCLOCK_ENABLED, 0));
-    cJSON_AddBoolToObject(root, "ledBlinkEnabled", GLOBAL_STATE->SYSTEM_MODULE.led_blink_enabled);
+    cJSON_AddBoolToObject(root, "ledBlinkEnabled", SYSTEM_get_led_blink_enabled(GLOBAL_STATE));
 
     cJSON_AddNumberToObject(root, "autofanspeed", nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1));
 
