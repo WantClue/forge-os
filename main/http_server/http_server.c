@@ -786,7 +786,14 @@ static esp_err_t PATCH_system_led(httpd_req_t * req)
     bool enabled = cJSON_IsBool(item) ? cJSON_IsTrue(item) : (item->valueint != 0);
     cJSON_Delete(root);
 
-    SYSTEM_set_led_blink_enabled(GLOBAL_STATE, enabled);
+    esp_err_t err = SYSTEM_set_led_blink_enabled(GLOBAL_STATE, enabled);
+    if (err != ESP_OK) {
+        // The LED itself was switched, only the NVS write failed, so the setting
+        // is live but will not survive a reboot. No claim of success
+        ESP_LOGE(TAG, "Failed to persist ledBlinkEnabled: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "LED blink applied but could not be saved");
+        return ESP_OK;
+    }
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, enabled ? "{\"success\":true,\"ledBlinkEnabled\":true}"

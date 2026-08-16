@@ -235,23 +235,30 @@ void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE, int pool_id)
     pthread_mutex_unlock(&led_blink_lock);
 }
 
-void SYSTEM_set_led_blink_enabled(GlobalState * GLOBAL_STATE, bool enabled)
+esp_err_t SYSTEM_set_led_blink_enabled(GlobalState * GLOBAL_STATE, bool enabled)
 {
     pthread_mutex_lock(&led_blink_lock);
     GLOBAL_STATE->SYSTEM_MODULE.led_blink_enabled = enabled;
 
     if (!enabled) {
         // Kill any blink already in flight so the LED goes dark immediately.
-        if (led_timer_1) {
-            xTimerStop(led_timer_1, 0);
+        // A failed stop is harmless: the one-shot still fires and drives the LED off.
+        if (led_timer_1 && xTimerStop(led_timer_1, 0) != pdPASS) {
+            ESP_LOGW(TAG, "Could not stop LED timer, blink will end on its own");
         }
         switch_led(1, 0);
     }
     pthread_mutex_unlock(&led_blink_lock);
 
-    nvs_config_set_u16(NVS_CONFIG_LED_BLINK, enabled ? 1 : 0);
+    // The runtime state is applied above; only persistence can fail from here on.
+    esp_err_t err = nvs_config_set_u16(NVS_CONFIG_LED_BLINK, enabled ? 1 : 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Share LED blink %s but not saved: %s", enabled ? "enabled" : "disabled", esp_err_to_name(err));
+        return err;
+    }
 
     ESP_LOGI(TAG, "Share LED blink %s", enabled ? "enabled" : "disabled");
+    return ESP_OK;
 }
 
 bool SYSTEM_get_led_blink_enabled(GlobalState * GLOBAL_STATE)

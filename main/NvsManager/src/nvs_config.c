@@ -84,7 +84,7 @@ uint16_t nvs_config_get_u16(const char * key, const uint16_t default_value)
     return out;
 }
 
-void nvs_config_set_u16(const char * key, const uint16_t value)
+esp_err_t nvs_config_set_u16(const char * key, const uint16_t value)
 {
 
     nvs_handle handle;
@@ -92,7 +92,7 @@ void nvs_config_set_u16(const char * key, const uint16_t value)
     err = nvs_open(NVS_CONFIG_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Could not open nvs");
-        return;
+        return err;
     }
 
     err = nvs_set_u16(handle, key, value);
@@ -106,6 +106,7 @@ void nvs_config_set_u16(const char * key, const uint16_t value)
     }
 
     nvs_close(handle);
+    return err;
 }
 
 uint64_t nvs_config_get_u64(const char * key, const uint64_t default_value)
