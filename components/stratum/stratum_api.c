@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #define TRANSPORT_TIMEOUT_MS 5000
 #define BUFFER_SIZE 1024
@@ -256,6 +257,32 @@ void STRATUM_V1_reset_message(StratumApiV1Message * message)
     message->extranonce_2_len = 0;
 }
 
+// Returns the string value of array[index], or NULL when the element is
+// missing or is not a JSON string. Every ->valuestring dereference on
+// pool-supplied data must go through this: the element *count* being right
+// does not stop a peer from putting a number, object or null where a string
+// is required, and cJSON leaves valuestring NULL for those.
+static const char * json_array_string(const cJSON * array, int index)
+{
+    cJSON * item = cJSON_GetArrayItem(array, index);
+    if (!cJSON_IsString(item)) {
+        return NULL;
+    }
+    return item->valuestring;
+}
+
+static bool json_is_integer(const cJSON * item)
+{
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    double value = item->valuedouble;
+    if (value < (double)INT_MIN || value > (double)INT_MAX) {
+        return false;
+    }
+    return value == (double)(int)value;
+}
+
 void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 {
     STRATUM_V1_reset_message(message);
@@ -263,10 +290,19 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
     ESP_LOGI(TAG, "rx: %s", stratum_json);
 
     cJSON * json = cJSON_Parse(stratum_json);
+    if (json == NULL) {
+        ESP_LOGE(TAG, "Unable to parse stratum message as JSON");
+        message->method = STRATUM_UNKNOWN;
+        return;
+    }
 
     cJSON * id_json = cJSON_GetObjectItem(json, "id");
     int parsed_id = -1;
-    if (id_json != NULL && cJSON_IsNumber(id_json)) {
+    // Integral check matters here too: message_id selects the subscribe-result
+    // branch below and separates setup replies from share replies, so a
+    // fractional id truncating onto a real one would misroute the message.
+    // A rejected id leaves -1, which is the same as a message carrying no id.
+    if (json_is_integer(id_json)) {
         parsed_id = id_json->valueint;
     }
     message->message_id = parsed_id;
@@ -338,12 +374,17 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             result = STRATUM_RESULT_SUBSCRIBE;
 
             cJSON * extranonce2_len_json = cJSON_GetArrayItem(result_json, 2);
-            if (extranonce2_len_json == NULL) {
-                ESP_LOGE(TAG, "Unable to parse extranonce2_len: %s", result_json->valuestring);
+            if (!json_is_integer(extranonce2_len_json)) {
+                ESP_LOGE(TAG, "Unable to parse extranonce2_len: %s", stratum_json);
                 message->response_success = false;
                 goto done;
             }
             int extranonce_2_len = extranonce2_len_json->valueint;
+            if (extranonce_2_len <= 0) {
+                ESP_LOGE(TAG, "Invalid extranonce2_len %d", extranonce_2_len);
+                message->response_success = false;
+                goto done;
+            }
             if (extranonce_2_len > MAX_EXTRANONCE_2_LEN) {
                 ESP_LOGW(TAG, "Extranonce_2_len %d exceeds maximum %d, clamping to maximum",
                          extranonce_2_len, MAX_EXTRANONCE_2_LEN);
@@ -351,20 +392,27 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             }
             message->extranonce_2_len = extranonce_2_len;
 
-            cJSON * extranonce_json = cJSON_GetArrayItem(result_json, 1);
-            if (extranonce_json == NULL) {
-                ESP_LOGE(TAG, "Unable parse extranonce: %s", result_json->valuestring);
+            const char * extranonce = json_array_string(result_json, 1);
+            if (extranonce == NULL) {
+                ESP_LOGE(TAG, "Unable to parse extranonce: %s", stratum_json);
                 message->response_success = false;
                 goto done;
             }
-            message->extranonce_str = strdup(extranonce_json->valuestring);
+            message->extranonce_str = strdup(extranonce);
+            if (message->extranonce_str == NULL) {
+                ESP_LOGE(TAG, "Out of memory copying extranonce");
+                message->response_success = false;
+                goto done;
+            }
             message->response_success = true;
 
         } else if (parsed_id == STRATUM_ID_CONFIGURE) {
             cJSON * mask = cJSON_GetObjectItem(result_json, "version-rolling.mask");
-            if (mask != NULL) {
+            if (cJSON_IsString(mask)) {
                 result = STRATUM_RESULT_VERSION_MASK;
                 message->version_mask = strtoul(mask->valuestring, NULL, 16);
+            } else if (mask != NULL) {
+                ESP_LOGE(TAG, "version-rolling.mask is not a string: %s", stratum_json);
             } else {
                 ESP_LOGI(TAG, "error setting version mask: %s", stratum_json);
             }
@@ -378,79 +426,109 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 
     if (message->method == MINING_NOTIFY) {
 
-        mining_notify * new_work = malloc(sizeof(mining_notify));
         cJSON * params = cJSON_GetObjectItem(json, "params");
         if (!params || !cJSON_IsArray(params)) {
             ESP_LOGE(TAG, "Invalid params in mining.notify");
             message->method = STRATUM_UNKNOWN;
-            free(new_work);
             goto done;
         }
+        // mining.notify is a fixed 9-element array: job_id, prevhash, coinb1,
+        // coinb2, merkle_branch, version, nbits, ntime, clean_jobs. Accepting 8
+        // let a truncated notify through with no clean_jobs flag at all.
         int params_count = cJSON_GetArraySize(params);
-        if (params_count < 8) {
+        if (params_count < 9) {
             ESP_LOGE(TAG, "Not enough params in mining.notify: %d", params_count);
             message->method = STRATUM_UNKNOWN;
-            free(new_work);
             goto done;
         }
-        cJSON *job_id_item = cJSON_GetArrayItem(params, 0);
-        if (!job_id_item || !cJSON_IsString(job_id_item)) {
-            ESP_LOGE(TAG, "Invalid job_id in mining.notify");
+
+        // Validate the whole message before allocating anything, so a malformed
+        // notify can't leave us unwinding a half-built mining_notify.
+        const char * job_id_str          = json_array_string(params, 0);
+        const char * prev_block_hash_str = json_array_string(params, 1);
+        const char * coinbase_1_str      = json_array_string(params, 2);
+        const char * coinbase_2_str      = json_array_string(params, 3);
+        const char * version_str         = json_array_string(params, 5);
+        const char * target_str          = json_array_string(params, 6);
+        const char * ntime_str           = json_array_string(params, 7);
+
+        if (job_id_str == NULL || prev_block_hash_str == NULL || coinbase_1_str == NULL ||
+            coinbase_2_str == NULL || version_str == NULL || target_str == NULL ||
+            ntime_str == NULL) {
+            ESP_LOGE(TAG, "Non-string param in mining.notify: %s", stratum_json);
             message->method = STRATUM_UNKNOWN;
-            free(new_work);
             goto done;
         }
-        new_work->job_id = strdup(job_id_item->valuestring);
-        new_work->prev_block_hash = strdup(cJSON_GetArrayItem(params, 1)->valuestring);
-        new_work->coinbase_1 = strdup(cJSON_GetArrayItem(params, 2)->valuestring);
-        new_work->coinbase_2 = strdup(cJSON_GetArrayItem(params, 3)->valuestring);
 
         cJSON * merkle_branch = cJSON_GetArrayItem(params, 4);
         if (!merkle_branch || !cJSON_IsArray(merkle_branch)) {
             ESP_LOGE(TAG, "Invalid merkle_branch in mining.notify");
             message->method = STRATUM_UNKNOWN;
-            free(new_work->job_id);
-            free(new_work->prev_block_hash);
-            free(new_work->coinbase_1);
-            free(new_work->coinbase_2);
-            free(new_work);
             goto done;
         }
-        new_work->n_merkle_branches = cJSON_GetArraySize(merkle_branch);
-        if (new_work->n_merkle_branches > MAX_MERKLE_BRANCHES) {
-            ESP_LOGE(TAG, "Too many Merkle branches: %d", new_work->n_merkle_branches);
+
+        int n_merkle_branches = cJSON_GetArraySize(merkle_branch);
+        if (n_merkle_branches > MAX_MERKLE_BRANCHES) {
+            ESP_LOGE(TAG, "Too many Merkle branches: %d", n_merkle_branches);
             message->method = STRATUM_UNKNOWN;
-            free(new_work->job_id);
-            free(new_work->prev_block_hash);
-            free(new_work->coinbase_1);
-            free(new_work->coinbase_2);
-            free(new_work);
             goto done;
         }
-        new_work->merkle_branches = malloc(HASH_SIZE * new_work->n_merkle_branches);
-        for (size_t i = 0; i < new_work->n_merkle_branches; i++) {
-            cJSON * branch = cJSON_GetArrayItem(merkle_branch, i);
-            if (!branch || !cJSON_IsString(branch)) {
-                ESP_LOGE(TAG, "Invalid merkle branch element at index %d", (int)i);
+
+        for (int i = 0; i < n_merkle_branches; i++) {
+            if (!cJSON_IsString(cJSON_GetArrayItem(merkle_branch, i))) {
+                ESP_LOGE(TAG, "Invalid merkle branch element at index %d", i);
                 message->method = STRATUM_UNKNOWN;
-                free(new_work->merkle_branches);
-                free(new_work->job_id);
-                free(new_work->prev_block_hash);
-                free(new_work->coinbase_1);
-                free(new_work->coinbase_2);
-                free(new_work);
                 goto done;
             }
+        }
+
+        // Everything checked out; build the notify. calloc so a partially
+        // populated struct is still safe to hand to STRATUM_V1_free_mining_notify.
+        mining_notify * new_work = calloc(1, sizeof(mining_notify));
+        if (new_work == NULL) {
+            ESP_LOGE(TAG, "Out of memory allocating mining_notify");
+            message->method = STRATUM_UNKNOWN;
+            goto done;
+        }
+
+        new_work->job_id = strdup(job_id_str);
+        new_work->prev_block_hash = strdup(prev_block_hash_str);
+        new_work->coinbase_1 = strdup(coinbase_1_str);
+        new_work->coinbase_2 = strdup(coinbase_2_str);
+        new_work->n_merkle_branches = n_merkle_branches;
+        if (n_merkle_branches > 0) {
+            new_work->merkle_branches = malloc(HASH_SIZE * n_merkle_branches);
+        }
+
+        if (new_work->job_id == NULL || new_work->prev_block_hash == NULL ||
+            new_work->coinbase_1 == NULL || new_work->coinbase_2 == NULL ||
+            (n_merkle_branches > 0 && new_work->merkle_branches == NULL)) {
+            ESP_LOGE(TAG, "Out of memory building mining.notify");
+            message->method = STRATUM_UNKNOWN;
+            STRATUM_V1_free_mining_notify(new_work);
+            goto done;
+        }
+
+        for (int i = 0; i < n_merkle_branches; i++) {
+            cJSON * branch = cJSON_GetArrayItem(merkle_branch, i);
             hex2bin(branch->valuestring, new_work->merkle_branches + HASH_SIZE * i, HASH_SIZE);
         }
 
-        new_work->version = strtoul(cJSON_GetArrayItem(params, 5)->valuestring, NULL, 16);
-        new_work->target = strtoul(cJSON_GetArrayItem(params, 6)->valuestring, NULL, 16);
-        new_work->ntime = strtoul(cJSON_GetArrayItem(params, 7)->valuestring, NULL, 16);
+        new_work->version = strtoul(version_str, NULL, 16);
+        new_work->target = strtoul(target_str, NULL, 16);
+        new_work->ntime = strtoul(ntime_str, NULL, 16);
 
-        int paramsLength = cJSON_GetArraySize(params);
-        int value = cJSON_IsTrue(cJSON_GetArrayItem(params, paramsLength - 1));
-        new_work->clean_jobs = value;
+        // clean_jobs is params[8] by spec. Reading the *last* element instead
+        // meant an 8-element notify picked up ntime, and any pool or proxy that
+        // appends fields shifted the read off the real flag.
+        cJSON * clean_jobs_item = cJSON_GetArrayItem(params, 8);
+        if (!cJSON_IsBool(clean_jobs_item)) {
+            // Default to false rather than rejecting: false means "keep the
+            // work you have", so a sloppy pool costs us one stale-work cleanup
+            // instead of stopping mining altogether.
+            ESP_LOGW(TAG, "Non-boolean clean_jobs in mining.notify, assuming false");
+        }
+        new_work->clean_jobs = cJSON_IsTrue(clean_jobs_item);
 
         message->mining_notification = new_work;
     } else if (message->method == MINING_SET_DIFFICULTY) {
@@ -477,19 +555,29 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * params = cJSON_GetObjectItem(json, "params");
         cJSON * p0 = params ? cJSON_GetArrayItem(params, 0) : NULL;
         cJSON * p1 = params ? cJSON_GetArrayItem(params, 1) : NULL;
-        if (p0 == NULL || !cJSON_IsString(p0) || p1 == NULL) {
+        if (!cJSON_IsString(p0) || !json_is_integer(p1)) {
             ESP_LOGE(TAG, "Invalid params in mining.set_extranonce");
             message->method = STRATUM_UNKNOWN;
             goto done;
         }
         char * extranonce_str = p0->valuestring;
-        uint32_t extranonce_2_len = p1->valueint;
+        int extranonce_2_len = p1->valueint;
+        if (extranonce_2_len <= 0) {
+            ESP_LOGE(TAG, "Invalid extranonce_2_len %d in mining.set_extranonce", extranonce_2_len);
+            message->method = STRATUM_UNKNOWN;
+            goto done;
+        }
         if (extranonce_2_len > MAX_EXTRANONCE_2_LEN) {
-            ESP_LOGW(TAG, "Extranonce_2_len %u exceeds maximum %d, clamping to maximum",
+            ESP_LOGW(TAG, "Extranonce_2_len %d exceeds maximum %d, clamping to maximum",
                      extranonce_2_len, MAX_EXTRANONCE_2_LEN);
             extranonce_2_len = MAX_EXTRANONCE_2_LEN;
         }
         message->extranonce_str = strdup(extranonce_str);
+        if (message->extranonce_str == NULL) {
+            ESP_LOGE(TAG, "Out of memory copying extranonce");
+            message->method = STRATUM_UNKNOWN;
+            goto done;
+        }
         message->extranonce_2_len = extranonce_2_len;
     }
     done:
@@ -498,6 +586,9 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 
 void STRATUM_V1_free_mining_notify(mining_notify * params)
 {
+    if (params == NULL) {
+        return;
+    }
     free(params->job_id);
     free(params->prev_block_hash);
     free(params->coinbase_1);

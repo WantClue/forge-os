@@ -107,6 +107,8 @@ typedef struct
 typedef struct
 {
     esp_transport_handle_t transport;
+    pthread_mutex_t transport_lock;
+    int transport_fd;
     portMUX_TYPE mux;
     int send_uid;
     int first_share_uid;
@@ -158,14 +160,22 @@ typedef struct
     uint32_t version_mask;
     bool new_stratum_version_rolling_msg;
 
+    // Single-pool connection. Owned by stratum_task: only that task may close
+    // or destroy the transport. transport_lock guards both the handle and its
+    // socket fd; any other task must hold it for the whole time it touches
+    // either. See "transport ownership" in stratum_task.c.
     esp_transport_handle_t transport;
+    pthread_mutex_t transport_lock;
+    int transport_fd;
+    // Set by any task, cleared by stratum_task. volatile because the worker
+    // polls it outside any lock.
+    volatile bool close_requested;
 
     // A message ID that must be unique per request that expects a response.
     // For requests not expecting a response (called notifications), this is null.
     int send_uid;
 
-    // Guards send_uid and the transport pointer against the stratum/asic_result
-    // tasks racing on share submit vs. connection teardown.
+    // Guards send_uid.
     portMUX_TYPE stratum_mux;
 
     bool ASIC_initalized;

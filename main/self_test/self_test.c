@@ -173,14 +173,14 @@ static esp_err_t test_reference_voltages(GlobalState * GLOBAL_STATE)
 {
     uint16_t _1V2_voltage = ADC_read(V_1V2_REF, GLOBAL_STATE);
     ESP_LOGI(TAG, "1V2 reference voltage: %u", _1V2_voltage); 
-    if (_1V2_voltage < REFERENCE_VOLTAGE_1V2_MIN && _1V2_voltage > REFERENCE_VOLTAGE_1V2_MAX) {
+    if (_1V2_voltage < REFERENCE_VOLTAGE_1V2_MIN || _1V2_voltage > REFERENCE_VOLTAGE_1V2_MAX) {
         ESP_LOGE(TAG, "1V2 reference voltage TEST FAIL, INCORRECT REFERENCE VOLTAGE");
         return ESP_FAIL;
     }
 
     uint16_t _0V8_voltage = ADC_read(V_0V8_REF, GLOBAL_STATE);
     ESP_LOGI(TAG, "0V8 reference voltage: %u", _0V8_voltage);
-    if (_0V8_voltage < REFERENCE_VOLTAGE_0V8_MIN && _0V8_voltage > REFERENCE_VOLTAGE_0V8_MAX) {
+    if (_0V8_voltage < REFERENCE_VOLTAGE_0V8_MIN || _0V8_voltage > REFERENCE_VOLTAGE_0V8_MAX) {
         ESP_LOGE(TAG, "0V8 reference voltage TEST FAIL, INCORRECT REFERENCE VOLTAGE");
         return ESP_FAIL;
     }
@@ -461,19 +461,38 @@ void execute_production_test(void * pvParameters)
     ESP_LOGI(TAG, "Measuring hashrate for 5 seconds...");
     while (duration_ms < hashtest_ms) {
         task_result * asic_result = ASIC_process_work(GLOBAL_STATE);
-        if (asic_result != NULL) {
-            // check the nonce difficulty
-            double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
-            counter += 8;  // DIFFICULTY = 8 (matches ESP-Miner-WantClue)
-            duration_ms = (esp_timer_get_time() / 1000) - start_ms;
-            hashrate = hash_counter_to_ghs(duration_ms, counter);
 
-            // Log every 50 nonces to avoid watchdog
-            if ((counter / 8) % 50 == 0) {
-                ESP_LOGI(TAG, "Nonce %lu diff %.2f", (unsigned long)asic_result->nonce, nonce_diff);
-                ESP_LOGI(TAG, "%.2f GH/s, duration %"PRIu32"ms", hashrate, duration_ms);
-            }
+        // The clock has to advance whether or not a nonce came back. With dead
+        // chips or a dead serial link ASIC_process_work only ever returns NULL,
+        // and updating this inside the success branch left the loop spinning
+        // forever instead of reporting a hashrate failure.
+        duration_ms = (esp_timer_get_time() / 1000) - start_ms;
+
+        if (asic_result == NULL) {
+            // A chain returning only malformed frames makes receive_work return
+            // without blocking, so yield to keep the idle task fed.
+            vTaskDelay(1);
+            continue;
         }
+
+        // check the nonce difficulty
+        double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
+        counter += 8;  // DIFFICULTY = 8 (matches ESP-Miner-WantClue)
+        hashrate = hash_counter_to_ghs(duration_ms, counter);
+
+        // Log every 50 nonces to avoid watchdog
+        if ((counter / 8) % 50 == 0) {
+            ESP_LOGI(TAG, "Nonce %lu diff %.2f", (unsigned long)asic_result->nonce, nonce_diff);
+            ESP_LOGI(TAG, "%.2f GH/s, duration %"PRIu32"ms", hashrate, duration_ms);
+        }
+    }
+
+    // Recompute against the final duration so a nonce arriving early in the
+    // window doesn't leave an optimistic hashrate behind.
+    hashrate = (duration_ms > 0) ? hash_counter_to_ghs(duration_ms, counter) : 0.0f;
+
+    if (counter == 0) {
+        ESP_LOGE(TAG, "No nonces received from ASICs during hashrate test");
     }
 
     vTaskDelay(10 / portTICK_PERIOD_MS);
