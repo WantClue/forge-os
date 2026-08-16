@@ -41,6 +41,7 @@
 #include "handler_ota_github.h"
 #include "nvs_config.h"
 #include "power.h"
+#include "system.h"
 #include "vcore.h"
 
 static const char * TAG = "http_server";
@@ -708,6 +709,98 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     return ESP_OK;
 }
 
+/* Report whether the share LED is allowed to blink */
+static esp_err_t GET_system_led(httpd_req_t * req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    cJSON * root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "ledBlinkEnabled", SYSTEM_get_led_blink_enabled(GLOBAL_STATE));
+
+    const char * response = cJSON_Print(root);
+    cJSON_Delete(root);
+    if (response == NULL) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+    httpd_resp_sendstr(req, response);
+    free((char *) response);
+    return ESP_OK;
+}
+
+/* Enable or disable the accepted-share LED blink */
+static esp_err_t PATCH_system_led(httpd_req_t * req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    int total_len = req->content_len;
+    int cur_len = 0;
+    char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
+    int received = 0;
+    if (total_len >= SCRATCH_BUFSIZE) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
+        return ESP_OK;
+    }
+    while (cur_len < total_len) {
+        received = httpd_req_recv(req, buf + cur_len, total_len);
+        if (received <= 0) {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
+            return ESP_OK;
+        }
+        cur_len += received;
+    }
+    buf[total_len] = '\0';
+
+    cJSON * root = cJSON_Parse(buf);
+    if (root == NULL) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_OK;
+    }
+
+    // Accept both true/false and 1/0
+    cJSON * item = cJSON_GetObjectItem(root, "ledBlinkEnabled");
+    if (!cJSON_IsBool(item) && !cJSON_IsNumber(item)) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid ledBlinkEnabled");
+        return ESP_OK;
+    }
+
+    bool enabled = cJSON_IsBool(item) ? cJSON_IsTrue(item) : (item->valueint != 0);
+    cJSON_Delete(root);
+
+    esp_err_t err = SYSTEM_set_led_blink_enabled(GLOBAL_STATE, enabled);
+    if (err != ESP_OK) {
+        // The LED itself was switched, only the NVS write failed, so the setting
+        // is live but will not survive a reboot. No claim of success
+        ESP_LOGE(TAG, "Failed to persist ledBlinkEnabled: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "LED blink applied but could not be saved");
+        return ESP_OK;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, enabled ? "{\"success\":true,\"ledBlinkEnabled\":true}"
+                                    : "{\"success\":true,\"ledBlinkEnabled\":false}");
+    return ESP_OK;
+}
+
 static esp_err_t POST_restart(httpd_req_t * req)
 {
     if (is_network_allowed(req) != ESP_OK) {
@@ -854,6 +947,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "overheat_mode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0));
     cJSON_AddNumberToObject(root, "overclockEnabled", nvs_config_get_u16(NVS_CONFIG_OVERCLOCK_ENABLED, 0));
+    cJSON_AddBoolToObject(root, "ledBlinkEnabled", SYSTEM_get_led_blink_enabled(GLOBAL_STATE));
 
     cJSON_AddNumberToObject(root, "autofanspeed", nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1));
 
@@ -1291,7 +1385,7 @@ esp_err_t start_rest_server(void * pvParameters)
     config.stack_size = 8192;
     // Leave descriptors available for DNS, Stratum and outbound services.
     config.max_open_sockets = 8;
-    config.max_uri_handlers = 24;
+    config.max_uri_handlers = 28;
     config.lru_purge_enable = true;
     config.keep_alive_enable = true;
     config.keep_alive_idle = 30;
@@ -1340,6 +1434,19 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = NULL,
     };
     httpd_register_uri_handler(server, &swarm_options_uri);
+
+    /* URI handlers for the accepted-share LED */
+    httpd_uri_t system_led_get_uri = {
+        .uri = "/api/system/led", .method = HTTP_GET, .handler = GET_system_led, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &system_led_get_uri);
+
+    httpd_uri_t system_led_patch_uri = {
+        .uri = "/api/system/led", .method = HTTP_PATCH, .handler = PATCH_system_led, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &system_led_patch_uri);
+
+    httpd_uri_t system_led_options_uri = {
+        .uri = "/api/system/led", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
+    httpd_register_uri_handler(server, &system_led_options_uri);
 
     httpd_uri_t system_restart_uri = {
         .uri = "/api/system/restart", .method = HTTP_POST, .handler = POST_restart, .user_ctx = rest_context};

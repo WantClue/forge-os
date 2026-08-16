@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,6 +38,7 @@ static void _suffix_string(uint64_t, char *, size_t, int);
 static esp_netif_t * netif;
 static TimerHandle_t led_timer_1 = NULL;
 static TimerHandle_t led_timer_2 = NULL;
+static pthread_mutex_t led_blink_lock = PTHREAD_MUTEX_INITIALIZER;
 
 //local function prototypes
 static esp_err_t ensure_overheat_mode_config();
@@ -54,6 +56,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->current_hashrate = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
+    module->led_blink_enabled = nvs_config_get_u16(NVS_CONFIG_LED_BLINK, 1) != 0;
     module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
     module->best_session_nonce_diff = 0;
     module->start_time = esp_timer_get_time();
@@ -225,7 +228,45 @@ void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE, int pool_id)
     if (pool_id >= 0 && pool_id < POOL_COUNT) {
         GLOBAL_STATE->pools[pool_id].shares_accepted++;
     }
-    switch_led(1, 1);
+    pthread_mutex_lock(&led_blink_lock);
+    if (module->led_blink_enabled) {
+        switch_led(1, 1);
+    }
+    pthread_mutex_unlock(&led_blink_lock);
+}
+
+esp_err_t SYSTEM_set_led_blink_enabled(GlobalState * GLOBAL_STATE, bool enabled)
+{
+    pthread_mutex_lock(&led_blink_lock);
+    GLOBAL_STATE->SYSTEM_MODULE.led_blink_enabled = enabled;
+
+    if (!enabled) {
+        // Kill any blink already in flight so the LED goes dark immediately.
+        // A failed stop is harmless: the one-shot still fires and drives the LED off.
+        if (led_timer_1 && xTimerStop(led_timer_1, 0) != pdPASS) {
+            ESP_LOGW(TAG, "Could not stop LED timer, blink will end on its own");
+        }
+        switch_led(1, 0);
+    }
+    pthread_mutex_unlock(&led_blink_lock);
+
+    // The runtime state is applied above; only persistence can fail from here on.
+    esp_err_t err = nvs_config_set_u16(NVS_CONFIG_LED_BLINK, enabled ? 1 : 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Share LED blink %s but not saved: %s", enabled ? "enabled" : "disabled", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Share LED blink %s", enabled ? "enabled" : "disabled");
+    return ESP_OK;
+}
+
+bool SYSTEM_get_led_blink_enabled(GlobalState * GLOBAL_STATE)
+{
+    pthread_mutex_lock(&led_blink_lock);
+    bool enabled = GLOBAL_STATE->SYSTEM_MODULE.led_blink_enabled;
+    pthread_mutex_unlock(&led_blink_lock);
+    return enabled;
 }
 
 static int compare_rejected_reason_stats(const void *a, const void *b) {

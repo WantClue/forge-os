@@ -7,6 +7,9 @@
 void SYSTEM_init_system(GlobalState * GLOBAL_STATE);
 esp_err_t SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE);
 
+esp_err_t SYSTEM_set_led_blink_enabled(GlobalState * GLOBAL_STATE, bool enabled);
+bool SYSTEM_get_led_blink_enabled(GlobalState * GLOBAL_STATE);
+
 void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE, int pool_id);
 void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE, int pool_id, char * error_msg);
 void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, uint8_t job_id);

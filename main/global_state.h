@@ -98,6 +98,7 @@ typedef struct
     uint16_t overheat_mode;
     uint16_t power_fault;
     uint32_t lastClockSync;
+    bool led_blink_enabled;
     bool is_firmware_update;
     char firmware_update_filename[20];
     char firmware_update_status[20];
