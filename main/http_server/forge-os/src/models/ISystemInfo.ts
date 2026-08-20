@@ -5,12 +5,25 @@ interface ISharesRejectedStat {
     count: number;
 }
 
+export interface ICoinbaseOutput {
+    address: string;
+    value: number;
+}
+
+export interface ICoinbase {
+    blockHeight: number;
+    scriptsig: string;
+    valueTotalSatoshis: number;
+    outputs: ICoinbaseOutput[];
+}
+
 interface IStratumPoolInfo {
     connected: boolean;
     validNotify: boolean;
     difficulty: number;
     accepted: number;
     rejected: number;
+    coinbase?: ICoinbase;
 }
 
 export interface ISystemInfo {
@@ -42,6 +55,7 @@ export interface ISystemInfo {
     poolMode: number,
     poolBalance: number,
     pools: IStratumPoolInfo[],
+    coinbase?: ICoinbase,
     uptimeSeconds: number,
     asicCount: number,
     smallCoreCount: number,

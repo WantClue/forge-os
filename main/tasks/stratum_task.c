@@ -15,6 +15,8 @@
 #include <esp_sntp.h>
 #include <time.h>
 #include <string.h>
+#include <inttypes.h>
+#include "coinbase_decoder.h"
 
 #define PORT CONFIG_STRATUM_PORT
 #define STRATUM_URL CONFIG_STRATUM_URL
@@ -284,6 +286,54 @@ static char *pool_user(GlobalState *GLOBAL_STATE, int pool_id)
 static char *pool_pass(GlobalState *GLOBAL_STATE, int pool_id)
 {
     return pool_id == POOL_SECONDARY ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_pass : GLOBAL_STATE->SYSTEM_MODULE.pool_pass;
+}
+
+// Decode the coinbase transaction of a mining.notify so the web UI can show
+// where the block reward would go. Purely informational: a notification we
+// cannot parse is dropped without touching the mining path.
+static void decode_mining_notification(GlobalState *GLOBAL_STATE, int pool_id,
+                                       const mining_notify *notification,
+                                       const char *extranonce_str, int extranonce_2_len)
+{
+    if (notification == NULL || extranonce_str == NULL) {
+        return;
+    }
+
+    mining_notification_result_t *result = calloc(1, sizeof(mining_notification_result_t));
+    if (result == NULL) {
+        ESP_LOGW(TAG, "Failed to allocate coinbase decode result");
+        return;
+    }
+
+    esp_err_t err = coinbase_process_notification(notification, extranonce_str, extranonce_2_len,
+                                                  pool_user(GLOBAL_STATE, pool_id), result);
+    if (err != ESP_OK) {
+        ESP_LOGD(TAG, "Could not decode %s coinbase transaction: %s", pool_label(pool_id), esp_err_to_name(err));
+        free(result->scriptsig);
+        free(result);
+        return;
+    }
+
+    CoinbaseInfo *coinbase = &GLOBAL_STATE->pools[pool_id].coinbase;
+
+    pthread_mutex_lock(&GLOBAL_STATE->coinbase_lock);
+    coinbase->block_height = result->block_height;
+    coinbase->output_count = result->output_count;
+    memcpy(coinbase->outputs, result->outputs, sizeof(coinbase->outputs));
+    coinbase->value_total_satoshis = result->total_value_satoshis;
+    if (result->scriptsig != NULL) {
+        snprintf(coinbase->scriptsig, sizeof(coinbase->scriptsig), "%s", result->scriptsig);
+    } else {
+        coinbase->scriptsig[0] = '\0';
+    }
+    coinbase->valid = true;
+    pthread_mutex_unlock(&GLOBAL_STATE->coinbase_lock);
+
+    ESP_LOGD(TAG, "%s coinbase: block %" PRIu32 ", %d outputs, %" PRIu64 " sats",
+             pool_label(pool_id), result->block_height, result->output_count, result->total_value_satoshis);
+
+    free(result->scriptsig);
+    free(result);
 }
 
 int stratum_get_next_pool_uid(GlobalState *GLOBAL_STATE, int pool_id)
@@ -611,6 +661,9 @@ static void handle_dual_pool_message(GlobalState *GLOBAL_STATE, int pool_id, Str
         }
 
         message->mining_notification->difficulty = pool->stratum_difficulty;
+
+        decode_mining_notification(GLOBAL_STATE, pool_id, message->mining_notification,
+                                   pool->extranonce_str, pool->extranonce_2_len);
 
         pthread_mutex_lock(&GLOBAL_STATE->stratum_work_lock);
         if (pool->current_notify != NULL) {
@@ -1010,6 +1063,10 @@ void stratum_task(void * pvParameters)
                     STRATUM_V1_free_mining_notify(next_notify_json_str);
                 }
                 stratum_api_v1_message.mining_notification->difficulty = SYSTEM_TASK_MODULE.stratum_difficulty;
+                decode_mining_notification(GLOBAL_STATE,
+                                           GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? POOL_SECONDARY : POOL_PRIMARY,
+                                           stratum_api_v1_message.mining_notification,
+                                           GLOBAL_STATE->extranonce_str, GLOBAL_STATE->extranonce_2_len);
                 queue_enqueue(&GLOBAL_STATE->stratum_queue, stratum_api_v1_message.mining_notification);
                 stratum_api_v1_message.mining_notification = NULL;
             } else if (stratum_api_v1_message.method == MINING_SET_DIFFICULTY) {

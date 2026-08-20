@@ -4,7 +4,12 @@ import { HashSuffixPipe } from "src/app/pipes/hash-suffix.pipe"
 import { TruncateMiddlePipe } from "src/app/pipes/truncate-middle.pipe"
 import { QuicklinkService } from "src/app/services/quicklink.service"
 import { SystemService } from "src/app/services/system.service"
-import type { ISystemInfo } from "src/models/ISystemInfo"
+import type { ICoinbase, ISystemInfo } from "src/models/ISystemInfo"
+
+interface ICoinbaseCard {
+  label: string
+  coinbase: ICoinbase
+}
 
 @Component({
     selector: "app-home",
@@ -19,6 +24,7 @@ export class HomeComponent {
   public quickLink$!: Observable<string | undefined>
   public fallbackQuickLink$!: Observable<string | undefined>
   public expectedHashRate$!: Observable<number | undefined>
+  public coinbaseCards$!: Observable<ICoinbaseCard[]>
 
   public chartOptions: any
   public dataLabel: number[] = []
@@ -286,6 +292,8 @@ export class HomeComponent {
       }),
     )
 
+    this.coinbaseCards$ = this.info$.pipe(map((info) => this.buildCoinbaseCards(info)))
+
     this.quickLink$ = this.info$.pipe(map((info) => this.quicklinkService.getQuickLink(info.stratumURL, info.stratumUser)))
 
     this.fallbackQuickLink$ = this.info$.pipe(
@@ -317,6 +325,24 @@ export class HomeComponent {
 
   public getPoolSharesAccepted(info: ISystemInfo, poolIndex: number): number {
     return info.pools?.[poolIndex]?.accepted ?? 0
+  }
+
+  // In dual mode both pools mine, so each one gets its own card. Otherwise
+  // only the pool currently being mined has a coinbase to show.
+  private buildCoinbaseCards(info: ISystemInfo): ICoinbaseCard[] {
+    if (this.isDualPool(info)) {
+      return (info.pools ?? [])
+        .map((pool, index) => ({ label: index === 0 ? "Primary" : "Secondary", coinbase: pool.coinbase }))
+        .filter((card): card is ICoinbaseCard => card.coinbase != null)
+    }
+
+    if (!info.coinbase) return []
+
+    return [{ label: info.isUsingFallbackStratum ? "Fallback" : "", coinbase: info.coinbase }]
+  }
+
+  public trackCoinbaseCard(_index: number, card: ICoinbaseCard): string {
+    return card.label
   }
 
 }

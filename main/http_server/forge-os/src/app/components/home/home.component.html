@@ -249,6 +249,38 @@
         </div>
     </div>
 
+    <!-- Coinbase Transaction -->
+    <div class="coinbase-grid" *ngIf="coinbaseCards$ | async as coinbaseCards">
+        <div class="info-card coinbase-card" *ngFor="let card of coinbaseCards; trackBy: trackCoinbaseCard">
+            <div class="info-header">
+                <i class="pi pi-bitcoin info-icon"></i>
+                <span class="info-title">Coinbase</span>
+                <span class="status-badge connected" *ngIf="card.label">{{card.label}}</span>
+            </div>
+            <div class="info-content">
+                <div class="info-item">
+                    <span class="info-label">Block Height</span>
+                    <span class="info-value">{{card.coinbase.blockHeight}}</span>
+                </div>
+                <div class="info-item" *ngIf="card.coinbase.scriptsig">
+                    <span class="info-label">Scriptsig</span>
+                    <span class="info-value coinbase-mono">{{card.coinbase.scriptsig}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Total Value</span>
+                    <span class="info-value">{{card.coinbase.valueTotalSatoshis | sats}}</span>
+                </div>
+                <div class="coinbase-outputs" *ngIf="card.coinbase.outputs?.length">
+                    <span class="info-label">Outputs</span>
+                    <div class="coinbase-output" *ngFor="let output of card.coinbase.outputs">
+                        <span class="coinbase-mono" [title]="output.address">{{output.address | truncateMiddle:14:12}}</span>
+                        <span class="coinbase-value" *ngIf="output.value > 0">{{output.value | sats}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Pool Information & Uptime -->
     <div class="info-grid">
         <div class="info-card pool-card">
