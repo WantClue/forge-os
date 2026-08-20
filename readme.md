@@ -30,7 +30,7 @@ The bitaxetool includes all necessary library for flashing the binaries to the B
 - Flash a "factory" image to a BitForge to reset to factory settings. Make sure to choose an image built for your hardware version (401) in this case:
 
 ```
-bitaxetool --firmware ./esp-miner-factory-BitForge-v1.0.bin
+bitaxetool --firmware ./bitforgeos-factory-BitForge-v1.0.bin
 ```
 - Flash just the NVS config to a bitaxe:
 
@@ -40,7 +40,7 @@ bitaxetool --config ./config-Nano.cvs
 - Flash both a factory image _and_ a config to your BitForge: note the settings in the config file will overwrite the config already baked into the factory image:
 
 ```
-bitaxetool --config ./config-Nano.cvs --firmware ./esp-miner-factory-BitForge-v1.0.bin
+bitaxetool --config ./config-Nano.cvs --firmware ./bitforgeos-factory-BitForge-v1.0.bin
 ```
 
 ## ForgeOS API
@@ -103,7 +103,7 @@ In order to unlock the Input fields for ASIC Frequency and ASIC Core Voltage you
 
 At the root of the repository, run:
 ```
-idf.py build && ./merge_bin.sh ./esp-miner-merged.bin
+idf.py build && ./merge_bin.sh ./bitforgeos-merged.bin
 ```
 
 Note: the merge_bin.sh script is a custom script that merges the bootloader, partition table, and the application binary into a single file.
@@ -115,7 +115,7 @@ Note: if using VSCode, you may have to configure the settings.json file to match
 With the bitforge connected to your computer via USB, run:
 
 ```
-bitaxetool --config ./config-xxx.cvs --firmware ./esp-miner-merged.bin
+bitaxetool --config ./config-xxx.cvs --firmware ./bitforgeos-merged.bin
 ```
 
 where xxx is the config file for your hardware version. You can see the list of available config files in the root of the repository.

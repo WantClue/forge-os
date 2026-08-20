@@ -72,7 +72,7 @@ for config_file in config-*.bin; do
         config_number=$(echo $config_file | sed 's/config-\(.*\)\.bin/\1/')
         
         # Create the output filename
-        output_file="esp-miner-factory-$config_number.bin"
+        output_file="bitforgeos-factory-$config_number.bin"
         
         # Prepare the bins and addresses array with the current config file
         BINS_AND_ADDRS_WITH_CONFIG=(${BINS_AND_ADDRS_DEFAULT[@]} $CONFIG_BIN_ADDR $config_file)

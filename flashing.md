@@ -11,7 +11,7 @@ You can flash [factory images](https://github.com/wantclue/forge-os/releases) to
     - on PC it will prolly be one of those COM ports. Good luck.
 - Select the proper serial port and then click connect
 - Once the ESP Tool has connected to your BitForge over serial, Set the Flash Address to `0x0`
-- Under File click "Choose File" and select the [factory image](https://github.com/wantclue/forge-os/releases) you want to flash. it's called something like `esp-miner-factory-400-v2.1.5.bin` Be sure to use the image with the same version number as your BitForge (400 in this case)
+- Under File click "Choose File" and select the [factory image](https://github.com/wantclue/forge-os/releases) you want to flash. it's called something like `bitforgeos-factory-400-v2.1.5.bin` Be sure to use the image with the same version number as your BitForge (400 in this case)
 - Down below click the "Program" button
 - Wait paitiently.
 - Keep waiting until the console on ESP Tool says "Leaving..."

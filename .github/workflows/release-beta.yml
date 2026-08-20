@@ -39,12 +39,12 @@ jobs:
         cache: 'pip'
     - run: pip install esptool
     - name: "Create factory/merged image"
-      run: "./merge_bin.sh ./esp-miner-merged.bin"
-    - name: upload esp-miner-merged.bin
+      run: "./merge_bin.sh ./bitforgeos-merged.bin"
+    - name: upload bitforgeos-merged.bin
       uses: actions/upload-artifact@v4
       with:
-        name: esp-miner-factory.bin
-        path: ./esp-miner-merged.bin
+        name: bitforgeos-merged.bin
+        path: ./bitforgeos-merged.bin
     - name: upload bitforgeos.bin
       uses: actions/upload-artifact@v4
       with:
@@ -55,15 +55,11 @@ jobs:
       with:
         name: www.bin
         path: ./build/www.bin
-    - name: Release www.bin
+    - name: Release firmware assets
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
         prerelease: true
-        files: ./build/www.bin
-    - name: Release bitforgeos.bin
-      uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        prerelease: true
-        files: ./build/bitforgeos.bin
+        files: |
+          ./build/bitforgeos.bin
+          ./build/www.bin
