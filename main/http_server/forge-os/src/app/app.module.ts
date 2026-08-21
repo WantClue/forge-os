@@ -27,6 +27,7 @@ import { DateAgoPipe } from './pipes/date-ago.pipe';
 import { HashSuffixPipe } from './pipes/hash-suffix.pipe';
 import { TruncateMiddlePipe } from './pipes/truncate-middle.pipe';
 import { DiffSuffixPipe } from './pipes/diff-suffix.pipe';
+import { SatsPipe } from './pipes/sats.pipe';
 import { ModalComponent } from './components/modal/modal.component';
 import { PrimeNGModule } from './prime-ng.module';
 import { MessageModule } from 'primeng/message';
@@ -57,6 +58,7 @@ const components = [
     SettingsComponent,
     HashSuffixPipe,
     DiffSuffixPipe,
+    SatsPipe,
     TruncateMiddlePipe,
     PoolComponent,
     ModalComponent,

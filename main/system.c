@@ -72,6 +72,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     pthread_mutex_init(&GLOBAL_STATE->stratum_work_lock, NULL);
     pthread_cond_init(&GLOBAL_STATE->stratum_work_updated, NULL);
     pthread_mutex_init(&GLOBAL_STATE->valid_jobs_lock, NULL);
+    pthread_mutex_init(&GLOBAL_STATE->coinbase_lock, NULL);
     GLOBAL_STATE->pool_error_accum = 0;
 
     // set the pool url
@@ -128,6 +129,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
         GLOBAL_STATE->pools[i].extranonce_2 = 0;
         GLOBAL_STATE->pools[i].shares_accepted = 0;
         GLOBAL_STATE->pools[i].shares_rejected = 0;
+        memset(&GLOBAL_STATE->pools[i].coinbase, 0, sizeof(CoinbaseInfo));
     }
 
     // Initialize overheat_mode

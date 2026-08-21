@@ -11,6 +11,7 @@
 #include "power_management_task.h"
 #include "serial.h"
 #include "stratum_api.h"
+#include "coinbase_decoder.h"
 #include "work_queue.h"
 #include "esp_transport.h"
 
@@ -22,6 +23,7 @@
 #define POOL_PRIMARY 0
 #define POOL_SECONDARY 1
 #define POOL_COUNT 2
+#define MAX_SCRIPTSIG_LEN 80
 
 typedef enum
 {
@@ -105,6 +107,19 @@ typedef struct
     char * asic_status;
 } SystemModule;
 
+// Coinbase transaction of the pool's most recent mining.notify, decoded for
+// display in the web UI. Written by the stratum task, read by the http server;
+// both go through coinbase_lock.
+typedef struct
+{
+    bool valid;
+    uint32_t block_height;
+    char scriptsig[MAX_SCRIPTSIG_LEN];
+    coinbase_output_t outputs[MAX_COINBASE_TX_OUTPUTS];
+    int output_count;
+    uint64_t value_total_satoshis;
+} CoinbaseInfo;
+
 typedef struct
 {
     esp_transport_handle_t transport;
@@ -125,6 +140,7 @@ typedef struct
     uint64_t extranonce_2;
     uint64_t shares_accepted;
     uint64_t shares_rejected;
+    CoinbaseInfo coinbase;
 } StratumPoolState;
 
 typedef struct
@@ -143,6 +159,7 @@ typedef struct
     StratumPoolState pools[POOL_COUNT];
     pthread_mutex_t stratum_work_lock;
     pthread_cond_t stratum_work_updated;
+    pthread_mutex_t coinbase_lock;
     int pool_error_accum;
 
     SystemModule SYSTEM_MODULE;

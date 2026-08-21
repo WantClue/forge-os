@@ -53,6 +53,15 @@ export class SystemService {
             { connected: true, validNotify: true, difficulty: 8192, accepted: 1, rejected: 0 },
             { connected: false, validNotify: false, difficulty: 8192, accepted: 0, rejected: 0 }
           ],
+          coinbase: {
+            blockHeight: 912345,
+            scriptsig: "/public-pool.io/",
+            valueTotalSatoshis: 312500000,
+            outputs: [
+              { address: "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d", value: 312500000 },
+              { address: "OP_RETURN: witness commitment", value: 0 }
+            ]
+          },
           uptimeSeconds: 38,
           asicCount: 1,
           smallCoreCount: 672,

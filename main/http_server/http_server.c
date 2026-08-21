@@ -829,6 +829,37 @@ static esp_err_t POST_restart(httpd_req_t * req)
     return ESP_OK;
 }
 
+// Snapshot of a pool's last decoded coinbase transaction. Returns NULL when
+// that pool has not seen a decodable mining.notify yet.
+static cJSON * create_coinbase_json(int pool_id)
+{
+    CoinbaseInfo coinbase;
+
+    pthread_mutex_lock(&GLOBAL_STATE->coinbase_lock);
+    memcpy(&coinbase, &GLOBAL_STATE->pools[pool_id].coinbase, sizeof(CoinbaseInfo));
+    pthread_mutex_unlock(&GLOBAL_STATE->coinbase_lock);
+
+    if (!coinbase.valid) {
+        return NULL;
+    }
+
+    cJSON * coinbase_obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(coinbase_obj, "blockHeight", coinbase.block_height);
+    cJSON_AddStringToObject(coinbase_obj, "scriptsig", coinbase.scriptsig);
+    cJSON_AddNumberToObject(coinbase_obj, "valueTotalSatoshis", coinbase.value_total_satoshis);
+
+    cJSON * outputs = cJSON_CreateArray();
+    for (int i = 0; i < coinbase.output_count && i < MAX_COINBASE_TX_OUTPUTS; i++) {
+        cJSON * output = cJSON_CreateObject();
+        cJSON_AddStringToObject(output, "address", coinbase.outputs[i].address);
+        cJSON_AddNumberToObject(output, "value", coinbase.outputs[i].value_satoshis);
+        cJSON_AddItemToArray(outputs, output);
+    }
+    cJSON_AddItemToObject(coinbase_obj, "outputs", outputs);
+
+    return coinbase_obj;
+}
+
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t * req)
 {
@@ -907,7 +938,21 @@ static esp_err_t GET_system_info(httpd_req_t * req)
         cJSON_AddNumberToObject(pool_obj, "difficulty", GLOBAL_STATE->pools[i].stratum_difficulty);
         cJSON_AddNumberToObject(pool_obj, "accepted", GLOBAL_STATE->pools[i].shares_accepted);
         cJSON_AddNumberToObject(pool_obj, "rejected", GLOBAL_STATE->pools[i].shares_rejected);
+        cJSON * pool_coinbase = create_coinbase_json(i);
+        if (pool_coinbase != NULL) {
+            cJSON_AddItemToObject(pool_obj, "coinbase", pool_coinbase);
+        }
         cJSON_AddItemToArray(pools_array, pool_obj);
+    }
+
+    // Coinbase transaction of the pool that is currently being mined. In dual
+    // mode both pools are active, so the primary one is reported here and the
+    // per-pool copies above carry the rest.
+    int active_pool = (GLOBAL_STATE->SYSTEM_MODULE.pool_mode != POOL_MODE_DUAL &&
+                       GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback) ? POOL_SECONDARY : POOL_PRIMARY;
+    cJSON * coinbase_obj = create_coinbase_json(active_pool);
+    if (coinbase_obj != NULL) {
+        cJSON_AddItemToObject(root, "coinbase", coinbase_obj);
     }
 
     cJSON * error_array = cJSON_CreateArray();
