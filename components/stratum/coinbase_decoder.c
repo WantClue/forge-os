@@ -20,29 +20,39 @@ static void ensure_base58_init(void) {
     }
 }
 
-uint64_t coinbase_decode_varint(const uint8_t *data, int *offset) {
+bool coinbase_decode_varint(const uint8_t *data, int data_len, int *offset, uint64_t *value) {
+    if (!data || !offset || !value || *offset < 0 || *offset >= data_len) {
+        return false;
+    }
+
     uint8_t first_byte = data[*offset];
-    (*offset)++;
+    int pos = *offset + 1;
+    int extra;
 
     if (first_byte < 0xFD) {
-        return first_byte;
+        *offset = pos;
+        *value = first_byte;
+        return true;
     } else if (first_byte == 0xFD) {
-        uint64_t value = data[*offset] | (data[*offset + 1] << 8);
-        *offset += 2;
-        return value;
+        extra = 2;
     } else if (first_byte == 0xFE) {
-        uint64_t value = data[*offset] | (data[*offset + 1] << 8) |
-                        (data[*offset + 2] << 16) | (data[*offset + 3] << 24);
-        *offset += 4;
-        return value;
+        extra = 4;
     } else { // 0xFF
-        uint64_t value = 0;
-        for (int i = 0; i < 8; i++) {
-            value |= ((uint64_t)data[*offset + i]) << (i * 8);
-        }
-        *offset += 8;
-        return value;
+        extra = 8;
     }
+
+    if (extra > data_len - pos) {
+        return false; // Truncated varint
+    }
+
+    uint64_t result = 0;
+    for (int i = 0; i < extra; i++) {
+        result |= ((uint64_t)data[pos + i]) << (i * 8);
+    }
+
+    *offset = pos + extra;
+    *value = result;
+    return true;
 }
 
 void coinbase_decode_address_from_scriptpubkey(const uint8_t *script, size_t script_len,
@@ -265,12 +275,12 @@ esp_err_t coinbase_process_notification(const mining_notify *notification,
     offset += 4;
 
     // Decode output count
-    if (offset >= coinbase_2_len) {
+    uint64_t num_outputs = 0;
+    if (!coinbase_decode_varint(coinbase_2_bin, coinbase_2_len, &offset, &num_outputs)) {
         free(coinbase_2_bin);
         return ESP_ERR_INVALID_ARG;
     }
 
-    uint64_t num_outputs = coinbase_decode_varint(coinbase_2_bin, &offset);
     result->output_count = 0;
 
     // Parse each output
@@ -288,10 +298,10 @@ esp_err_t coinbase_process_notification(const mining_notify *notification,
         result->total_value_satoshis += value_satoshis;
 
         // Read scriptPubKey length
-        if (offset >= coinbase_2_len) break;
-        uint64_t script_len = coinbase_decode_varint(coinbase_2_bin, &offset);
+        uint64_t script_len = 0;
+        if (!coinbase_decode_varint(coinbase_2_bin, coinbase_2_len, &offset, &script_len)) break;
 
-        if (offset + script_len > (uint64_t) coinbase_2_len) break;
+        if (script_len > (uint64_t)(coinbase_2_len - offset)) break;
 
         if (result->output_count < MAX_COINBASE_TX_OUTPUTS) {
             coinbase_output_t *out = &result->outputs[result->output_count];
