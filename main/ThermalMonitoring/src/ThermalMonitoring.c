@@ -23,7 +23,7 @@ esp_err_t Thermal_init(GlobalState * GLOBAL_STATE) {
             // First EMC2101
             PAC9544_selectChannel(2);
             vTaskDelay(pdMS_TO_TICKS(10)); // Allow PAC9544 channel switch to settle
-            EMC2101_init(true);
+            EMC2101_init();
             EMC2101_setIdealityFactor(EMC2101_IDEALITY_1_0566);
             EMC2101_setBetaCompensation(EMC2101_BETA_11);
             // Initial fan speed will be set by power management task
@@ -39,7 +39,7 @@ esp_err_t Thermal_init(GlobalState * GLOBAL_STATE) {
             // Second EMC2101
             PAC9544_selectChannel(3);
             vTaskDelay(pdMS_TO_TICKS(10)); // Allow PAC9544 channel switch to settle
-            EMC2101_init(true);
+            EMC2101_init();
             EMC2101_setIdealityFactor(EMC2101_IDEALITY_1_0566);
             EMC2101_setBetaCompensation(EMC2101_BETA_11);
             // Initial fan speed will be set by power management task

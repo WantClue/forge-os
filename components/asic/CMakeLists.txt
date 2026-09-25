@@ -13,7 +13,8 @@ INCLUDE_DIRS
 
 REQUIRES 
     "freertos"
-    "driver"
+    "esp_driver_gpio"
+    "esp_driver_uart"
     "stratum"
 )
 

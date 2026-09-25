@@ -3,8 +3,9 @@
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-#include "mbedtls/sha256.h"
+#include "sha256.h"
 
 #ifndef bswap_16
 #define bswap_16(a) ((((uint16_t)(a) << 8) & 0xff00) | (((uint16_t)(a) >> 8) & 0xff))
@@ -174,8 +175,8 @@ char *double_sha256(const char *hex_string)
 
     unsigned char first_hash_output[32], second_hash_output[32];
 
-    mbedtls_sha256(bin, bin_len, first_hash_output, 0);
-    mbedtls_sha256(first_hash_output, 32, second_hash_output, 0);
+    sha256(bin, bin_len, first_hash_output);
+    sha256(first_hash_output, 32, second_hash_output);
 
     free(bin);
 
@@ -189,25 +190,17 @@ uint8_t *double_sha256_bin(const uint8_t *data, const size_t data_len)
     uint8_t first_hash_output[32];
     uint8_t *second_hash_output = malloc(32);
 
-    mbedtls_sha256(data, data_len, first_hash_output, 0);
-    mbedtls_sha256(first_hash_output, 32, second_hash_output, 0);
+    sha256(data, data_len, first_hash_output);
+    sha256(first_hash_output, 32, second_hash_output);
 
     return second_hash_output;
 }
 
 void single_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t *dest)
 {
-    // mbedtls_sha256(data, data_len, dest, 0);
-
-    // Initialize SHA256 context
-    mbedtls_sha256_context sha256_ctx;
-    mbedtls_sha256_init(&sha256_ctx);
-    mbedtls_sha256_starts(&sha256_ctx, 0);
-
     // Compute first SHA256 hash of header
-    mbedtls_sha256_update(&sha256_ctx, data, 64);
     unsigned char hash[32];
-    mbedtls_sha256_finish(&sha256_ctx, hash);
+    sha256(data, 64, hash);
 
     // Compute midstate from hash
     memcpy(dest, hash, 32);
@@ -215,12 +208,11 @@ void single_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t *dest
 
 void midstate_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t *dest)
 {
-    mbedtls_sha256_context midstate;
+    sha256_ctx_t midstate;
 
     // Calculate midstate
-    mbedtls_sha256_init(&midstate);
-    mbedtls_sha256_starts(&midstate, 0);
-    mbedtls_sha256_update(&midstate, data, 64);
+    sha256_init(&midstate);
+    sha256_update(&midstate, data, 64);
 
     // memcpy(dest, midstate.state, 32);
      flip32bytes(dest, midstate.state);
