@@ -34,9 +34,11 @@ export class SettingsComponent implements OnDestroy {
   public ASICModel!: eASICModel;
 
   public checkLatestRelease: boolean = false;
+  public showManualUpdate: boolean = false;
   public latestRelease$: Observable<any>;
-  public releases$!: Observable<GithubRelease[]>;
   public selectedRelease: GithubRelease | null = null;
+  public releaseCheckState: 'loading' | 'update' | 'uptodate' | 'error' = 'loading';
+  public releaseNotesHtml: string = '';
 
   // GitHub OTA state
   public isGithubOTA: boolean = false;
@@ -47,8 +49,8 @@ export class SettingsComponent implements OnDestroy {
 
   public info$: Observable<any>;
 
-  @ViewChild('firmwareUpload') firmwareUpload!: FileUpload;
-  @ViewChild('websiteUpload') websiteUpload!: FileUpload;
+  @ViewChild('firmwareUpload') firmwareUpload?: FileUpload;
+  @ViewChild('websiteUpload') websiteUpload?: FileUpload;
 
   constructor(
     private fb: FormBuilder,
@@ -141,7 +143,7 @@ export class SettingsComponent implements OnDestroy {
     if (this.isUpdating) return;
 
     const file = event.files[0];
-    this.firmwareUpload.clear();
+    this.firmwareUpload?.clear();
 
     if (file.name != 'bitforgeos.bin') {
       this.toastrService.error('Incorrect file, looking for bitforgeos.bin.', 'Error');
@@ -188,7 +190,7 @@ export class SettingsComponent implements OnDestroy {
     if (this.isUpdating) return;
 
     const file = event.files[0];
-    this.websiteUpload.clear();
+    this.websiteUpload?.clear();
 
     if (file.name != 'www.bin') {
       this.toastrService.error('Incorrect file, looking for www.bin.', 'Error');
@@ -234,13 +236,45 @@ export class SettingsComponent implements OnDestroy {
       });
   }
 
-  public loadReleases() {
+  public loadReleases(currentVersion: string | undefined) {
     this.checkLatestRelease = true;
-    this.releases$ = this.githubUpdateService.getReleases();
+    this.releaseCheckState = 'loading';
+    this.selectedRelease = null;
+
+    this.githubUpdateService.getReleases().subscribe({
+      next: (releases) => {
+        // GitHub returns releases newest first; only the latest is offered so users can't downgrade
+        const latest = releases[0];
+        if (!latest) {
+          this.releaseCheckState = 'error';
+          return;
+        }
+        this.selectedRelease = latest;
+        this.releaseNotesHtml = this.githubUpdateService.renderReleaseNotes(latest.body);
+        this.releaseCheckState = this.isNewerVersion(latest.tag_name, currentVersion) ? 'update' : 'uptodate';
+      },
+      error: () => {
+        this.releaseCheckState = 'error';
+      }
+    });
   }
 
-  public onReleaseSelected(release: GithubRelease) {
-    this.selectedRelease = release;
+  // Compares the numeric part of tags like "v1.6" against "v1.5-3-gabc123-dirty".
+  // If the current version can't be parsed, the update is offered.
+  private isNewerVersion(latest: string, current: string | undefined): boolean {
+    const parse = (v: string | undefined) => {
+      const match = v?.match(/(\d+(?:\.\d+)*)/);
+      return match ? match[1].split('.').map(Number) : null;
+    };
+    const l = parse(latest);
+    const c = parse(current);
+    if (!l) return false;
+    if (!c) return true;
+    for (let i = 0; i < Math.max(l.length, c.length); i++) {
+      const diff = (l[i] ?? 0) - (c[i] ?? 0);
+      if (diff !== 0) return diff > 0;
+    }
+    return false;
   }
 
   public getStepLabel(step: string): string {

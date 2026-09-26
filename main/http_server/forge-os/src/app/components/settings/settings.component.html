@@ -4,33 +4,44 @@
 </div>
 
 <div class="grid settings-update-grid">
-    <div class="col-12 lg:col-6 settings-update-column">
-        <div class="card settings-update-card" *ngIf="checkLatestRelease == false">
-            <h5>Current Version: {{(info$ | async)?.version}}</h5>
-            <h2>Release & Update: <p-button (onClick)="loadReleases()">Check</p-button></h2>
-            <small>Clicking this button will connect to GitHub to check for recent updates</small>
-        </div>
-        <div class="card settings-update-card" *ngIf="checkLatestRelease == true">
-            <h5>Current Version: {{(info$ | async)?.version}}</h5>
+    <div class="col-12 settings-update-column">
+        <div class="card settings-update-card settings-github-card" *ngIf="info$ | async as info">
+            <h5>Current Version: {{info.version}}</h5>
+            <h2>Release & Update</h2>
 
-            <ng-container *ngIf="releases$ | async as releases">
-                <div class="mb-3">
-                    <label class="block mb-2 font-bold">Select Release</label>
-                    <p-dropdown
-                        [options]="releases"
-                        optionLabel="name"
-                        placeholder="Select a release"
-                        (onChange)="onReleaseSelected($event.value)"
-                        [style]="{'width': '100%'}">
-                    </p-dropdown>
+            <ng-container *ngIf="!checkLatestRelease">
+                <div>
+                    <p-button label="Check for Updates" icon="pi pi-refresh" styleClass="p-button-lg" (onClick)="loadReleases(info.version)"></p-button>
+                </div>
+                <small>Clicking this button will connect to GitHub to check for recent updates</small>
+            </ng-container>
+
+            <ng-container *ngIf="checkLatestRelease">
+                <div *ngIf="releaseCheckState === 'loading'">
+                    <i class="pi pi-spin pi-spinner mr-2"></i>Checking GitHub for the latest release...
                 </div>
 
-                <div *ngIf="selectedRelease" class="mb-3">
+                <div *ngIf="releaseCheckState === 'error'">
+                    <div class="text-red-500 mb-3">Could not reach GitHub to check for updates.</div>
+                    <p-button label="Try again" icon="pi pi-refresh" (onClick)="loadReleases(info.version)"></p-button>
+                </div>
+
+                <div *ngIf="releaseCheckState === 'uptodate' && selectedRelease">
+                    <span class="version-status current"><i class="pi pi-check"></i>Up to date</span>
+                    <small>Latest release is {{selectedRelease.name || selectedRelease.tag_name}}.</small>
+                </div>
+
+                <div *ngIf="releaseCheckState === 'update' && selectedRelease">
+                    <div class="mb-3">
+                        <span class="version-status update-available"><i class="pi pi-arrow-up"></i>Update available</span>
+                        <div class="text-xl font-bold mt-2">{{selectedRelease.name || selectedRelease.tag_name}}</div>
+                    </div>
+
                     <div *ngFor="let asset of selectedRelease.assets">
                         <div *ngIf="asset.name == 'bitforgeos.bin' || asset.name == 'www.bin'">
                             <a style="text-decoration: underline;" target="_blank"
                                 [href]="asset.browser_download_url">{{asset.name}}</a>
-                            <small class="ml-2">({{(asset.size / 1024 / 1024).toFixed(1)}} MB)</small>
+                            <small class="ml-2 inline">({{(asset.size / 1024 / 1024).toFixed(1)}} MB)</small>
                         </div>
                     </div>
 
@@ -38,6 +49,7 @@
                         <p-button
                             label="Install from GitHub"
                             icon="pi pi-download"
+                            styleClass="p-button-lg"
                             [disabled]="isGithubOTA"
                             (onClick)="installFromGithub()">
                         </p-button>
@@ -50,28 +62,47 @@
                         <p-progressBar [value]="githubOTAProgress"></p-progressBar>
                     </div>
                 </div>
+                <div *ngIf="(releaseCheckState === 'update' || releaseCheckState === 'uptodate') && releaseNotesHtml" class="mt-3">
+                    <label class="block mb-2 font-bold">Release notes – {{selectedRelease?.name || selectedRelease?.tag_name}}</label>
+                    <div class="release-notes" [innerHTML]="releaseNotesHtml"></div>
+                </div>
             </ng-container>
         </div>
     </div>
-    <div class="col-12 lg:col-6 xl:col-3 settings-update-column">
-      <div class="card settings-update-card settings-upload-card">
-          <h2>Update Website</h2>
 
-          <p-fileUpload #websiteUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaWWWUpdate($event)"
-              [auto]="true" chooseLabel="Browse" chooseIcon="pi-plus" [disabled]="isUpdating"></p-fileUpload>
-
-          <small>(www.bin)</small>
-      </div>
+    <div class="col-12 settings-manual-toggle">
+        <p-button
+            [label]="showManualUpdate ? 'Hide customized firmware install' : 'Install customized firmware'"
+            [icon]="showManualUpdate ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+            styleClass="p-button-text p-button-sm"
+            (onClick)="showManualUpdate = !showManualUpdate">
+        </p-button>
+        <small *ngIf="showManualUpdate">
+            Only upload files you built yourself or trust. For regular updates, use "Install from GitHub" above.
+        </small>
     </div>
-    <div class="col-12 lg:col-6 xl:col-3 settings-update-column">
-        <div class="card settings-update-card settings-upload-card">
-            <h2>Update Firmware</h2>
-            <p-fileUpload #firmwareUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaUpdate($event)"
-                [auto]="true" chooseLabel="Browse" chooseIcon="pi-plus" [disabled]="isUpdating"></p-fileUpload>
 
-            <small>(bitforgeos.bin)</small>
+    <ng-container *ngIf="showManualUpdate">
+        <div class="col-12 lg:col-6 settings-update-column">
+          <div class="card settings-update-card settings-upload-card">
+              <h2>Update Website</h2>
+
+              <p-fileUpload #websiteUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaWWWUpdate($event)"
+                  [auto]="true" chooseLabel="Browse" chooseIcon="pi-plus" [disabled]="isUpdating"></p-fileUpload>
+
+              <small>(www.bin)</small>
+          </div>
         </div>
-    </div>
+        <div class="col-12 lg:col-6 settings-update-column">
+            <div class="card settings-update-card settings-upload-card">
+                <h2>Update Firmware</h2>
+                <p-fileUpload #firmwareUpload [customUpload]="true" mode="basic" accept=".bin" (uploadHandler)="otaUpdate($event)"
+                    [auto]="true" chooseLabel="Browse" chooseIcon="pi-plus" [disabled]="isUpdating"></p-fileUpload>
+
+                <small>(bitforgeos.bin)</small>
+            </div>
+        </div>
+    </ng-container>
 </div>
 
 <app-modal #progressModal [headline]="'Updating ' + updateTarget" [closable]="updateStatus !== 'progress'">
