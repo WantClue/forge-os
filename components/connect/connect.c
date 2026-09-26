@@ -421,7 +421,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
 void generate_ssid(char * ssid)
 {
     uint8_t mac[6];
-    esp_wifi_get_mac(ESP_IF_WIFI_AP, mac);
+    esp_wifi_get_mac(WIFI_IF_AP, mac);
     // Format the last 4 bytes of the MAC address as a hexadecimal string
     snprintf(ssid, 32, "Nano_%02X%02X", mac[4], mac[5]);
 }

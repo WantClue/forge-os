@@ -1389,7 +1389,7 @@ esp_err_t http_404_error_handler(httpd_req_t * req, httpd_err_code_t err)
     return ESP_OK;
 }
 
-void websocket_log_handler()
+void websocket_log_handler(void * pvParameters)
 {
     while (true) {
         websocket_log_message_t * message = NULL;

@@ -12,7 +12,7 @@ static i2c_master_bus_handle_t i2c_bus_handle;
  *
  * @return esp_err_t ESP_OK on success, or an error code on failure.
  */
-esp_err_t EMC2101_init() {
+esp_err_t EMC2101_init(void) {
     /*if (i2c_bitforge_add_device(EMC2101_I2CADDR_DEFAULT, &EMC2101_dev_handle, TAG) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to add device");
         return ESP_FAIL;

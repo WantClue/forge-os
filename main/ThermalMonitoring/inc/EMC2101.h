@@ -164,7 +164,7 @@
     } emc2101_rate_t;
 
 
-esp_err_t EMC2101_init();
+esp_err_t EMC2101_init(void);
 void EMC2101_setFanSpeed(float);
 uint16_t EMC2101_getFanSpeed();
 float EMC2101_getExternalTemp();

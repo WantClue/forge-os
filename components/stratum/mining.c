@@ -1,9 +1,10 @@
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <limits.h>
 #include "mining.h"
 #include "utils.h"
-#include "mbedtls/sha256.h"
+#include "sha256.h"
 
 void free_bm_job(bm_job *job)
 {
@@ -158,8 +159,8 @@ double test_nonce_value(const bm_job *job, const uint32_t nonce, const uint32_t 
     unsigned char hash_result[32];
 
     // double hash the header
-    mbedtls_sha256(header, 80, hash_buffer, 0);
-    mbedtls_sha256(hash_buffer, 32, hash_result, 0);
+    sha256(header, 80, hash_buffer);
+    sha256(hash_buffer, 32, hash_result);
 
     d64 = truediffone;
     s64 = le256todouble(hash_result);
