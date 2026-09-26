@@ -1,5 +1,5 @@
 import { Component } from "@angular/core"
-import { interval, map, type Observable, shareReplay, startWith, switchMap, tap } from "rxjs"
+import { map, type Observable, shareReplay, tap } from "rxjs"
 import { HashSuffixPipe } from "src/app/pipes/hash-suffix.pipe"
 import { TruncateMiddlePipe } from "src/app/pipes/truncate-middle.pipe"
 import { QuicklinkService } from "src/app/services/quicklink.service"
@@ -228,11 +228,7 @@ export class HomeComponent {
       },
     }
 
-    this.info$ = interval(5000).pipe(
-      startWith(() => this.systemService.getInfo()),
-      switchMap(() => {
-        return this.systemService.getInfo()
-      }),
+    this.info$ = this.systemService.info$.pipe(
       tap((info) => {
         // Only collect and update chart data if there's no power fault
         if (!info.power_fault) {
@@ -247,7 +243,8 @@ export class HomeComponent {
 
           this.dataLabel.push(new Date().getTime())
 
-          if (this.hashrateData.length >= 720) {
+          // One hour of samples at the shared 3 s poll interval
+          if (this.hashrateData.length >= 1200) {
             this.hashrateData.shift()
             this.temperatureData.shift()
             this.powerData.shift()
@@ -271,7 +268,9 @@ export class HomeComponent {
         this.maxTemp = Math.max(75, maxAsicTemp)
         this.maxFrequency = Math.max(800, info.frequency)
       }),
-      map((info) => {
+      map((rawInfo) => {
+        // Copy before formatting; the polled object is shared with other views
+        const info = { ...rawInfo }
         info.power = Number.parseFloat(info.power.toFixed(1))
         info.voltage = Number.parseFloat((info.voltage / 1000).toFixed(1))
         info.current = Number.parseFloat((info.current / 1000).toFixed(1))

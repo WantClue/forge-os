@@ -44,5 +44,6 @@ uint16_t nvs_config_get_u16(const char * key, const uint16_t default_value);
 esp_err_t nvs_config_set_u16(const char * key, const uint16_t value);
 uint64_t nvs_config_get_u64(const char * key, const uint64_t default_value);
 void nvs_config_set_u64(const char * key, const uint64_t value);
+uint32_t nvs_config_get_generation(void);
 
 #endif // MAIN_NVS_CONFIG_H

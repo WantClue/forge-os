@@ -1,6 +1,6 @@
 import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { delay, Observable, of } from 'rxjs';
+import { catchError, delay, EMPTY, exhaustMap, Observable, of, shareReplay, timer } from 'rxjs';
 import { eASICModel } from 'src/models/enum/eASICModel';
 import { ISystemInfo } from 'src/models/ISystemInfo';
 
@@ -11,9 +11,26 @@ import { environment } from '../../environments/environment';
 })
 export class SystemService {
 
+  /**
+   * Shared live poll of this device's /api/system/info. All views subscribe
+   * to this one stream, so an open tab sends one request per interval no
+   * matter how many components display the data. Treat emitted objects as
+   * read-only; they are shared between subscribers.
+   */
+  public readonly info$: Observable<ISystemInfo>;
+
+  private static readonly INFO_POLL_INTERVAL_MS = 3000;
+
   constructor(
     private httpClient: HttpClient
-  ) { }
+  ) {
+    this.info$ = timer(0, SystemService.INFO_POLL_INTERVAL_MS).pipe(
+      // Skip ticks while a request is still running instead of stacking them
+      // up, and keep polling after a failed request
+      exhaustMap(() => this.getInfo().pipe(catchError(() => EMPTY))),
+      shareReplay({ refCount: true, bufferSize: 1 })
+    );
+  }
 
   public getInfo(uri: string = ''): Observable<ISystemInfo> {
     if (environment.production) {

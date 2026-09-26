@@ -1,5 +1,5 @@
 import { AfterViewChecked, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
-import { interval, map, Observable, shareReplay, startWith, Subscription, switchMap } from 'rxjs';
+import { map, Observable, shareReplay, Subscription } from 'rxjs';
 import { SystemService } from 'src/app/services/system.service';
 import { WebsocketService } from 'src/app/services/web-socket.service';
 import { ISystemInfo } from 'src/models/ISystemInfo';
@@ -33,12 +33,10 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
   ) {
 
 
-    this.info$ = interval(5000).pipe(
-      startWith(() => this.systemService.getInfo()),
-      switchMap(() => {
-        return this.systemService.getInfo()
-      }),
-      map(info => {
+    this.info$ = this.systemService.info$.pipe(
+      map(rawInfo => {
+        // Copy before formatting; the polled object is shared with other views
+        const info = { ...rawInfo };
         info.power = parseFloat(info.power.toFixed(1))
         info.voltage = parseFloat((info.voltage / 1000).toFixed(1));
         info.current = parseFloat((info.current / 1000).toFixed(1));

@@ -1,7 +1,7 @@
 import { Component, ElementRef, Input, ViewChild } from '@angular/core';
 import { MenuItem } from 'primeng/api';
 import { ToastrService } from 'ngx-toastr';
-import { interval, type Observable, shareReplay, startWith, switchMap } from 'rxjs';
+import { type Observable } from 'rxjs';
 
 import { LayoutService } from './service/app.layout.service';
 import { SystemService } from '../services/system.service';
@@ -31,11 +31,7 @@ export class AppTopBarComponent {
         private toastr: ToastrService,
     ) { 
         // Initialize system info observable for status display
-        this.info$ = interval(3000).pipe(
-            startWith(() => this.systemService.getInfo()),
-            switchMap(() => this.systemService.getInfo()),
-            shareReplay({ refCount: true, bufferSize: 1 })
-        );
+        this.info$ = this.systemService.info$;
     }
 
     public restart() {

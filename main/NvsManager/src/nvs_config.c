@@ -1,11 +1,20 @@
 #include "nvs_config.h"
 #include "esp_log.h"
 #include "nvs.h"
+#include <stdatomic.h>
 #include <string.h>
 
 #define NVS_CONFIG_NAMESPACE "main"
 
 static const char * TAG = "nvs_config";
+
+// Bumped on every write so readers can cache values until something changes
+static atomic_uint s_generation = ATOMIC_VAR_INIT(0);
+
+uint32_t nvs_config_get_generation(void)
+{
+    return atomic_load(&s_generation);
+}
 
 char * nvs_config_get_string(const char * key, const char * default_value)
 {
@@ -62,6 +71,7 @@ void nvs_config_set_string(const char * key, const char * value)
         }
     }
 
+    atomic_fetch_add(&s_generation, 1);
     nvs_close(handle);
 }
 
@@ -105,6 +115,7 @@ esp_err_t nvs_config_set_u16(const char * key, const uint16_t value)
         }
     }
 
+    atomic_fetch_add(&s_generation, 1);
     nvs_close(handle);
     return err;
 }
@@ -150,5 +161,6 @@ void nvs_config_set_u64(const char * key, const uint64_t value)
             ESP_LOGW(TAG, "Could not commit nvs key: %s", key);
         }
     }
+    atomic_fetch_add(&s_generation, 1);
     nvs_close(handle);
 }

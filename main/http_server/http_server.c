@@ -865,6 +865,84 @@ static cJSON * create_coinbase_json(int pool_id)
     return coinbase_obj;
 }
 
+// Settings reported by /api/system/info, cached so the frequently polled
+// endpoint does not hit NVS on every request. Only touched from the HTTPD
+// task. Reloaded whenever any NVS config value has been written since.
+typedef struct {
+    bool loaded;
+    uint32_t generation;
+    char * ssid;
+    char * hostname;
+    char * stratum_url;
+    char * fallback_stratum_url;
+    char * stratum_user;
+    char * fallback_stratum_user;
+    char * stratum_cert;
+    char * fallback_stratum_cert;
+    char * board_version;
+    uint16_t core_voltage;
+    uint16_t frequency;
+    uint16_t pool_mode;
+    uint16_t pool_balance;
+    uint16_t stratum_port;
+    uint16_t fallback_stratum_port;
+    uint16_t stratum_tls;
+    uint16_t fallback_stratum_tls;
+    uint16_t overheat_mode;
+    uint16_t overclock_enabled;
+    uint16_t auto_fan_speed;
+    uint16_t manual_fan_speed;
+} system_info_settings_t;
+
+static system_info_settings_t info_settings;
+
+static void reload_cached_string(char ** slot, const char * key, const char * default_value)
+{
+    free(*slot);
+    *slot = nvs_config_get_string(key, default_value);
+}
+
+static const system_info_settings_t * get_system_info_settings(void)
+{
+    // Read the generation before loading, so a write that races with the
+    // reload is picked up on the next request
+    uint32_t generation = nvs_config_get_generation();
+    if (info_settings.loaded && info_settings.generation == generation) {
+        return &info_settings;
+    }
+
+    reload_cached_string(&info_settings.ssid, NVS_CONFIG_WIFI_SSID, CONFIG_ESP_WIFI_SSID);
+    reload_cached_string(&info_settings.hostname, NVS_CONFIG_HOSTNAME, CONFIG_LWIP_LOCAL_HOSTNAME);
+    reload_cached_string(&info_settings.stratum_url, NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
+    reload_cached_string(&info_settings.fallback_stratum_url, NVS_CONFIG_FALLBACK_STRATUM_URL, CONFIG_FALLBACK_STRATUM_URL);
+    reload_cached_string(&info_settings.stratum_user, NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
+    reload_cached_string(&info_settings.fallback_stratum_user, NVS_CONFIG_FALLBACK_STRATUM_USER, CONFIG_FALLBACK_STRATUM_USER);
+    reload_cached_string(&info_settings.stratum_cert, NVS_CONFIG_STRATUM_CERT, CONFIG_STRATUM_CERT);
+    reload_cached_string(&info_settings.fallback_stratum_cert, NVS_CONFIG_FALLBACK_STRATUM_CERT, CONFIG_FALLBACK_STRATUM_CERT);
+    reload_cached_string(&info_settings.board_version, NVS_CONFIG_BOARD_VERSION, "unknown");
+
+    info_settings.core_voltage = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
+    info_settings.frequency = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
+    info_settings.pool_mode = nvs_config_get_u16(NVS_CONFIG_POOL_MODE, POOL_MODE_FALLBACK);
+    info_settings.pool_balance = nvs_config_get_u16(NVS_CONFIG_POOL_BALANCE, 50);
+    info_settings.stratum_port = nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT);
+    info_settings.fallback_stratum_port = nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, CONFIG_FALLBACK_STRATUM_PORT);
+    info_settings.stratum_tls = nvs_config_get_u16(NVS_CONFIG_STRATUM_TLS, CONFIG_STRATUM_TLS);
+    info_settings.fallback_stratum_tls = nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_TLS, CONFIG_FALLBACK_STRATUM_TLS);
+    info_settings.overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
+    info_settings.overclock_enabled = nvs_config_get_u16(NVS_CONFIG_OVERCLOCK_ENABLED, 0);
+    info_settings.auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1);
+    info_settings.manual_fan_speed = nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+
+    // A string can only be NULL when an allocation failed; retry next time
+    info_settings.generation = generation;
+    info_settings.loaded = info_settings.ssid && info_settings.hostname && info_settings.stratum_url &&
+                           info_settings.fallback_stratum_url && info_settings.stratum_user &&
+                           info_settings.fallback_stratum_user && info_settings.stratum_cert &&
+                           info_settings.fallback_stratum_cert && info_settings.board_version;
+    return &info_settings;
+}
+
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t * req)
 {
@@ -883,15 +961,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     // Detect if request is coming from AP network using actual AP netif subnet
     bool request_from_ap = is_request_from_ap(req);
 
-    char * ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, CONFIG_ESP_WIFI_SSID);
-    char * hostname = nvs_config_get_string(NVS_CONFIG_HOSTNAME, CONFIG_LWIP_LOCAL_HOSTNAME);
+    const system_info_settings_t * settings = get_system_info_settings();
     uint8_t mac[6];
     char formattedMac[18];
-    char * stratumURL = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
-    char * fallbackStratumURL = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_URL, CONFIG_FALLBACK_STRATUM_URL);
-    char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
-    char * fallbackStratumUser = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_USER, CONFIG_FALLBACK_STRATUM_USER);
-    char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "unknown");
 
     esp_wifi_get_mac(WIFI_IF_STA, mac);
     snprintf(formattedMac, 18, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -919,20 +991,20 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "freeHeapInternal", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     cJSON_AddNumberToObject(root, "freeHeapSpiram", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-    cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
+    cJSON_AddNumberToObject(root, "coreVoltage", settings->core_voltage);
     cJSON_AddNumberToObject(root, "coreVoltageActual", VCORE_get_voltage_mv(GLOBAL_STATE));
-    cJSON_AddNumberToObject(root, "frequency", nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
-    cJSON_AddStringToObject(root, "ssid", ssid);
+    cJSON_AddNumberToObject(root, "frequency", settings->frequency);
+    cJSON_AddStringToObject(root, "ssid", settings->ssid);
     cJSON_AddStringToObject(root, "macAddr", formattedMac);
-    cJSON_AddStringToObject(root, "hostname", hostname);
+    cJSON_AddStringToObject(root, "hostname", settings->hostname);
     cJSON_AddStringToObject(root, "wifiStatus", GLOBAL_STATE->SYSTEM_MODULE.wifi_status);
     cJSON_AddNumberToObject(root, "wifiRSSI", wifi_rssi);
     cJSON_AddNumberToObject(root, "apEnabled", GLOBAL_STATE->SYSTEM_MODULE.ap_enabled);
     cJSON_AddBoolToObject(root, "requestFromAp", request_from_ap);
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
-    cJSON_AddNumberToObject(root, "poolMode", nvs_config_get_u16(NVS_CONFIG_POOL_MODE, POOL_MODE_FALLBACK));
-    cJSON_AddNumberToObject(root, "poolBalance", nvs_config_get_u16(NVS_CONFIG_POOL_BALANCE, 50));
+    cJSON_AddNumberToObject(root, "poolMode", settings->pool_mode);
+    cJSON_AddNumberToObject(root, "poolBalance", settings->pool_balance);
 
     cJSON * pools_array = cJSON_CreateArray();
     cJSON_AddItemToObject(root, "pools", pools_array);
@@ -974,36 +1046,32 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "asicCount", ASIC_get_asic_count(GLOBAL_STATE));
     cJSON_AddNumberToObject(root, "smallCoreCount", ASIC_get_small_core_count(GLOBAL_STATE));
     cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
-    cJSON_AddStringToObject(root, "stratumURL", stratumURL);
-    cJSON_AddStringToObject(root, "fallbackStratumURL", fallbackStratumURL);
-    cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT));
-    cJSON_AddNumberToObject(root, "fallbackStratumPort",
-                            nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, CONFIG_FALLBACK_STRATUM_PORT));
-    cJSON_AddStringToObject(root, "stratumUser", stratumUser);
-    cJSON_AddStringToObject(root, "fallbackStratumUser", fallbackStratumUser);
-    cJSON_AddNumberToObject(root, "stratumTLS", nvs_config_get_u16(NVS_CONFIG_STRATUM_TLS, CONFIG_STRATUM_TLS));
-    cJSON_AddNumberToObject(root, "fallbackStratumTLS",
-                            nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_TLS, CONFIG_FALLBACK_STRATUM_TLS));
+    cJSON_AddStringToObject(root, "stratumURL", settings->stratum_url);
+    cJSON_AddStringToObject(root, "fallbackStratumURL", settings->fallback_stratum_url);
+    cJSON_AddNumberToObject(root, "stratumPort", settings->stratum_port);
+    cJSON_AddNumberToObject(root, "fallbackStratumPort", settings->fallback_stratum_port);
+    cJSON_AddStringToObject(root, "stratumUser", settings->stratum_user);
+    cJSON_AddStringToObject(root, "fallbackStratumUser", settings->fallback_stratum_user);
+    cJSON_AddNumberToObject(root, "stratumTLS", settings->stratum_tls);
+    cJSON_AddNumberToObject(root, "fallbackStratumTLS", settings->fallback_stratum_tls);
 
-    char * stratumCert = nvs_config_get_string(NVS_CONFIG_STRATUM_CERT, CONFIG_STRATUM_CERT);
-    char * fallbackStratumCert = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_CERT, CONFIG_FALLBACK_STRATUM_CERT);
-    cJSON_AddStringToObject(root, "stratumCert", stratumCert);
-    cJSON_AddStringToObject(root, "fallbackStratumCert", fallbackStratumCert);
+    cJSON_AddStringToObject(root, "stratumCert", settings->stratum_cert);
+    cJSON_AddStringToObject(root, "fallbackStratumCert", settings->fallback_stratum_cert);
 
     cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
     cJSON_AddStringToObject(root, "idfVersion", esp_get_idf_version());
-    cJSON_AddStringToObject(root, "boardVersion", board_version);
+    cJSON_AddStringToObject(root, "boardVersion", settings->board_version);
     cJSON_AddStringToObject(root, "runningPartition", esp_ota_get_running_partition()->label);
 
-    cJSON_AddNumberToObject(root, "overheat_mode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0));
-    cJSON_AddNumberToObject(root, "overclockEnabled", nvs_config_get_u16(NVS_CONFIG_OVERCLOCK_ENABLED, 0));
+    cJSON_AddNumberToObject(root, "overheat_mode", settings->overheat_mode);
+    cJSON_AddNumberToObject(root, "overclockEnabled", settings->overclock_enabled);
     cJSON_AddBoolToObject(root, "ledBlinkEnabled", SYSTEM_get_led_blink_enabled(GLOBAL_STATE));
 
-    cJSON_AddNumberToObject(root, "autofanspeed", nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1));
+    cJSON_AddNumberToObject(root, "autofanspeed", settings->auto_fan_speed);
 
     cJSON_AddNumberToObject(root, "fanSpeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc);
     cJSON_AddNumberToObject(root, "fanrpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_rpm[0]);
-    cJSON_AddNumberToObject(root, "manualFanSpeed", nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100));
+    cJSON_AddNumberToObject(root, "manualFanSpeed", settings->manual_fan_speed);
 
     cJSON_AddNumberToObject(root, "chiptemp1", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp[0]);
     cJSON_AddNumberToObject(root, "chiptemp2", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp[1]);
@@ -1012,17 +1080,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
         cJSON_AddStringToObject(root, "power_fault", VCORE_get_fault_string(GLOBAL_STATE));
     }
 
-    free(ssid);
-    free(hostname);
-    free(stratumURL);
-    free(fallbackStratumURL);
-    free(stratumUser);
-    free(fallbackStratumUser);
-    free(stratumCert);
-    free(fallbackStratumCert);
-    free(board_version);
-
-    const char * sys_info = cJSON_Print(root);
+    const char * sys_info = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     if (sys_info == NULL) {
         httpd_resp_send_500(req);
