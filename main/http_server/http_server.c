@@ -1342,30 +1342,34 @@ static void http_session_close(httpd_handle_t handle, int sockfd)
 }
 
 /*
- * This handler echos back the received ws data
- * and triggers an async send if certain message received
+ * Runs once the WebSocket handshake has been answered.
+ */
+static esp_err_t ws_post_handshake(httpd_req_t * req)
+{
+    // Returning an error closes the freshly upgraded session
+    if (is_network_allowed(req) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+    int new_fd = httpd_req_to_sockfd(req);
+    int old_fd = atomic_exchange(&websocket_fd, new_fd);
+    esp_log_set_vprintf(log_to_queue);
+
+    // Logging supports one client. Close the previous WebSocket instead
+    // of leaving an unused persistent session in the HTTPD socket table.
+    if (old_fd >= 0 && old_fd != new_fd &&
+        httpd_ws_get_fd_info(server, old_fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
+        httpd_sess_trigger_close(server, old_fd);
+    }
+    return ESP_OK;
+}
+
+/*
+ * Handles frames received on the logging WebSocket
  */
 esp_err_t echo_handler(httpd_req_t * req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    if (req->method == HTTP_GET) {
-        ESP_LOGI(TAG, "Handshake done, the new connection was opened");
-        int new_fd = httpd_req_to_sockfd(req);
-        int old_fd = atomic_exchange(&websocket_fd, new_fd);
-        esp_log_set_vprintf(log_to_queue);
-
-        // Logging supports one client. Close the previous WebSocket instead
-        // of leaving an unused persistent session in the HTTPD socket table.
-        if (old_fd >= 0 && old_fd != new_fd &&
-            httpd_ws_get_fd_info(server, old_fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
-            httpd_sess_trigger_close(server, old_fd);
-        }
-        return ESP_OK;
-    }
-
     // The logging WebSocket is server-to-client only. Read the frame header,
     // then close clients that send application data.
     httpd_ws_frame_t ws_pkt = {0};
@@ -1537,7 +1541,12 @@ esp_err_t start_rest_server(void * pvParameters)
         .uri = "/api/system/OTA/github", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
     httpd_register_uri_handler(server, &ota_github_options_uri);
 
-    httpd_uri_t ws = {.uri = "/api/ws", .method = HTTP_GET, .handler = echo_handler, .user_ctx = NULL, .is_websocket = true};
+    httpd_uri_t ws = {.uri = "/api/ws",
+                      .method = HTTP_GET,
+                      .handler = echo_handler,
+                      .user_ctx = NULL,
+                      .is_websocket = true,
+                      .ws_post_handshake_cb = ws_post_handshake};
     httpd_register_uri_handler(server, &ws);
 
     if (enter_recovery) {
