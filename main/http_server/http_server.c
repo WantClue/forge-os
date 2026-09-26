@@ -196,9 +196,10 @@ static bool is_request_from_ap(httpd_req_t * req)
 QueueHandle_t log_queue = NULL;
 
 static atomic_int websocket_fd = ATOMIC_VAR_INIT(-1);
+static atomic_bool log_flush_pending = ATOMIC_VAR_INIT(false);
 
 typedef struct {
-    int fd;
+    size_t len;
     char text[];
 } websocket_log_message_t;
 
@@ -213,6 +214,10 @@ typedef struct {
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (10240)
 #define MESSAGE_QUEUE_SIZE (128)
+#define LOG_FLUSH_MAX_MESSAGES (32)
+#define LOG_FLUSH_INTERVAL_MS (100)
+#define LOG_FLUSH_STALE_US (10 * 1000 * 1000)
+#define WEBSOCKET_SEND_TIMEOUT_S (2)
 
 typedef struct rest_server_context
 {
@@ -1290,6 +1295,7 @@ int log_to_queue(const char * format, va_list args)
         message->text[len + 1] = '\0';
         len++;
     }
+    message->len = len;
 
     // Print to standard output
     printf("%s", message->text);
@@ -1301,33 +1307,54 @@ int log_to_queue(const char * format, va_list args)
     return 0;
 }
 
-static void send_log_to_websocket(void * arg)
+static void discard_queued_logs(void)
 {
-    websocket_log_message_t * message = arg;
+    websocket_log_message_t * message = NULL;
+    while (xQueueReceive(log_queue, &message, 0) == pdPASS) {
+        free(message);
+    }
+}
 
-    // Prepare the WebSocket frame
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t *) message->text;
-    ws_pkt.len = strlen(message->text);
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+/*
+ * Drains the log queue into the WebSocket. Runs in the HTTPD task, so the
+ * descriptor cannot be closed and reused between validation and transmission.
+ * The messages are owned by the queue until they are taken here, so a flush
+ * request that is dropped by the HTTPD control socket leaks nothing.
+ */
+static void flush_logs_to_websocket(void * arg)
+{
+    (void) arg;
+    atomic_store(&log_flush_pending, false);
 
-    // This callback runs in the HTTPD task, so the descriptor cannot be
-    // closed and reused between validation and transmission.
-    if (server != NULL && message->fd == atomic_load(&websocket_fd) &&
-        httpd_ws_get_fd_info(server, message->fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
-        if (httpd_ws_send_frame_async(server, message->fd, &ws_pkt) == ESP_OK) {
-            httpd_sess_update_lru_counter(server, message->fd);
-        } else {
-            int expected_fd = message->fd;
+    int fd = atomic_load(&websocket_fd);
+    if (server == NULL || fd < 0 || httpd_ws_get_fd_info(server, fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+        discard_queued_logs();
+        return;
+    }
+
+    // Send a bounded batch so API requests get served between flushes
+    websocket_log_message_t * message = NULL;
+    for (int i = 0; i < LOG_FLUSH_MAX_MESSAGES && xQueueReceive(log_queue, &message, 0) == pdPASS; i++) {
+        httpd_ws_frame_t ws_pkt = {
+            .type = HTTPD_WS_TYPE_TEXT,
+            .payload = (uint8_t *) message->text,
+            .len = message->len,
+        };
+        esp_err_t err = httpd_ws_send_frame_async(server, fd, &ws_pkt);
+        free(message);
+
+        if (err != ESP_OK) {
+            int expected_fd = fd;
             if (atomic_compare_exchange_strong(&websocket_fd, &expected_fd, -1)) {
                 esp_log_set_vprintf(vprintf);
             }
-            httpd_sess_trigger_close(server, message->fd);
+            httpd_sess_trigger_close(server, fd);
+            discard_queued_logs();
+            return;
         }
     }
 
-    free(message);
+    httpd_sess_update_lru_counter(server, fd);
 }
 
 static void http_session_close(httpd_handle_t handle, int sockfd)
@@ -1353,6 +1380,12 @@ static esp_err_t ws_post_handshake(httpd_req_t * req)
 
     ESP_LOGI(TAG, "Handshake done, the new connection was opened");
     int new_fd = httpd_req_to_sockfd(req);
+
+    // Log frames are sent from the HTTPD task, so a stalled client must not
+    // block it for the full server-wide send timeout
+    struct timeval send_timeout = {.tv_sec = WEBSOCKET_SEND_TIMEOUT_S};
+    setsockopt(new_fd, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout));
+
     int old_fd = atomic_exchange(&websocket_fd, new_fd);
     esp_log_set_vprintf(log_to_queue);
 
@@ -1395,18 +1428,34 @@ esp_err_t http_404_error_handler(httpd_req_t * req, httpd_err_code_t err)
 
 void websocket_log_handler(void * pvParameters)
 {
+    int64_t flush_queued_at = 0;
+
     while (true) {
+        // Wait for a message without taking it; the HTTPD task drains the queue
         websocket_log_message_t * message = NULL;
-        if (xQueueReceive(log_queue, &message, (TickType_t) portMAX_DELAY) != pdPASS) {
-            // message was never written by xQueueReceive — do not access it
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+        if (xQueuePeek(log_queue, &message, (TickType_t) portMAX_DELAY) != pdPASS) {
             continue;
         }
 
-        message->fd = atomic_load(&websocket_fd);
-        if (server == NULL || message->fd < 0 || httpd_queue_work(server, send_log_to_websocket, message) != ESP_OK) {
-            free(message);
+        if (server == NULL || atomic_load(&websocket_fd) < 0) {
+            discard_queued_logs();
+            continue;
         }
+
+        // Keep at most one flush in flight. httpd_queue_work() reports success
+        // even when the control socket later drops the request, so a flush
+        // that never ran is re-queued once it is stale.
+        int64_t now = esp_timer_get_time();
+        if (!atomic_load(&log_flush_pending) || now - flush_queued_at > LOG_FLUSH_STALE_US) {
+            atomic_store(&log_flush_pending, true);
+            flush_queued_at = now;
+            if (httpd_queue_work(server, flush_logs_to_websocket, NULL) != ESP_OK) {
+                atomic_store(&log_flush_pending, false);
+            }
+        }
+
+        // Let lines accumulate so each flush sends a batch
+        vTaskDelay(pdMS_TO_TICKS(LOG_FLUSH_INTERVAL_MS));
     }
 }
 

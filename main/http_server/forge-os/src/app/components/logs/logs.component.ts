@@ -17,6 +17,10 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
 
   public logs: { className: string, text: string }[] = [];
 
+  // Plain-text history for downloading, kept longer than the on-screen list
+  private downloadLines: string[] = [];
+  private static readonly MAX_DOWNLOAD_LINES = 5000;
+
   private websocketSubscription?: Subscription;
 
   public showLogs = false;
@@ -77,11 +81,32 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
           if (this.logs.length > 256) {
             this.logs.shift();
           }
+
+          this.downloadLines.push(val.replace(/\x1b\[[0-9;]*m/g, '').replace(/\n$/, ''));
+          if (this.downloadLines.length > LogsComponent.MAX_DOWNLOAD_LINES) {
+            this.downloadLines.shift();
+          }
         }
       })
     } else {
       this.websocketSubscription?.unsubscribe();
     }
+  }
+
+  public get hasDownloadableLogs(): boolean {
+    return this.downloadLines.length > 0;
+  }
+
+  public downloadLogs() {
+    const blob = new Blob([this.downloadLines.join('\n') + '\n'], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `forge-os-logs-${timestamp}.txt`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url));
   }
 
   ngAfterViewChecked(): void {

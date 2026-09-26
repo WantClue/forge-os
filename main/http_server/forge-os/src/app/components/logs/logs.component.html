@@ -63,6 +63,9 @@
                     <button pButton class="btn-secondary control-button" (click)="stopScroll = !stopScroll" *ngIf="showLogs">
                         {{stopScroll ? 'Start' : 'Stop'}} Scrolling
                     </button>
+                    <button pButton icon="pi pi-download" class="btn-secondary control-button" (click)="downloadLogs()" *ngIf="hasDownloadableLogs">
+                        Download Logs
+                    </button>
                 </div>
             </div>
 
