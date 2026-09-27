@@ -32,6 +32,7 @@ export class QuicklinkService {
       { search: 'parasite.wtf', url: `https://parasite.space/user/${user}` },
       { regex: /^(eu|au)?solo[46]?.ckpool\.org/, url: `https://$1solostats.ckpool.org/users/${user}` },
       { search: 'atlaspool.io', url: `https://atlaspool.io/dashboard.html?wallet=${user}` },
+      { search: 'btcpowlab-pool.com', url: `https://btcpowlab-pool.com/miner/${user}` },
       { regex: /^(eu\.|tinyminer\.)?m45core\.com$/, url: `https://$1m45core.com/user/${user}` },
     ];
 
