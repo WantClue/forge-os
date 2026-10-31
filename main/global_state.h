@@ -68,7 +68,13 @@ typedef struct
     char best_diff_string[DIFF_STRING_SIZE];
     uint64_t best_session_nonce_diff;
     char best_session_diff_string[DIFF_STRING_SIZE];
-    bool FOUND_BLOCK;
+    // Blocks this device solved. last_block_* describe the most recent one;
+    // hashes are raw double-SHA256 digests (internal byte order).
+    uint64_t blocks_found;
+    uint8_t last_block_hash[32];
+    uint8_t last_block_parent[32];
+    uint32_t last_block_time; // header ntime
+    uint16_t last_block_status; // block_status_t
     char ssid[32];
     char wifi_status[20];
     char ip_addr_str[16]; // IP4ADDR_STRLEN_MAX

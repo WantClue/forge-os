@@ -3,6 +3,7 @@
 #include "utils.h"
 
 #include <limits.h>
+#include <string.h>
 
 TEST_CASE("Check coinbase tx construction", "[mining]")
 {
@@ -191,4 +192,54 @@ TEST_CASE("Test nonce diff checking 2", "[mining test_nonce][not-on-qemu]")
     uint32_t nonce = 0x0a029ed1;
     double diff = test_nonce_value(&job, nonce, 0);
     TEST_ASSERT_EQUAL_INT(683, (int)diff);
+}
+
+// Mainnet block 125552: hash 00000000000000001e8d6829a8a21adc5d38d0a473b144b6765798e61f98bd1d
+TEST_CASE("Detect a real block and its child's prev hash", "[mining block][not-on-qemu]")
+{
+    mining_notify notify_message;
+    // prev 00000000000008a3a41b85b8b29ad444def299fee21793cd8b9e567eab02cd81 in stratum word order
+    notify_message.prev_block_hash = "ab02cd818b9e567ee21793cddef299feb29ad444a41b85b8000008a300000000";
+    notify_message.version = 1;
+    notify_message.target = 0x1a44b9f2;
+    notify_message.ntime = 1305998791;
+    // merkle root in internal byte order
+    const char *merkle_root = "e320b6c2fffc8d750423db8b1eb942ae710e951ed797f7affc8892b0f1fc122b";
+    bm_job job = construct_bm_job(&notify_message, merkle_root, 0);
+
+    uint8_t hash[32];
+    uint8_t target[32];
+    test_nonce_hash(&job, 2504433986u, 1, hash);
+    TEST_ASSERT_TRUE(nbits_to_target(job.target, target));
+    TEST_ASSERT_TRUE(hash_meets_target(hash, target));
+
+    uint8_t display[32];
+    memcpy(display, hash, 32);
+    reverse_bytes(display, 32);
+    char hex[65];
+    bin2hex(display, 32, hex, sizeof(hex));
+    TEST_ASSERT_EQUAL_STRING("00000000000000001e8d6829a8a21adc5d38d0a473b144b6765798e61f98bd1d", hex);
+
+    // A job built on top of this block carries its hash as prev_block_hash
+    notify_message.prev_block_hash = "1f98bd1d765798e673b144b65d38d0a4a8a21adc1e8d68290000000000000000";
+    bm_job child = construct_bm_job(&notify_message, merkle_root, 0);
+    TEST_ASSERT_EQUAL_MEMORY(hash, child.prev_block_hash, 32);
+
+    uint8_t miss[32];
+    test_nonce_hash(&job, 2504433987u, 1, miss);
+    TEST_ASSERT_FALSE(hash_meets_target(miss, target));
+}
+
+TEST_CASE("Expand compact nBits", "[mining block]")
+{
+    uint8_t t[32];
+    TEST_ASSERT_TRUE(nbits_to_target(0x1d00ffff, t));
+    TEST_ASSERT_EQUAL_HEX8(0xff, t[27]);
+    TEST_ASSERT_EQUAL_HEX8(0xff, t[26]);
+    TEST_ASSERT_EQUAL_HEX8(0x00, t[28]);
+    TEST_ASSERT_TRUE(nbits_to_target(0x207fffff, t));
+    TEST_ASSERT_EQUAL_HEX8(0x7f, t[31]);
+    TEST_ASSERT_FALSE(nbits_to_target(0x1d800000, t)); // negative
+    TEST_ASSERT_FALSE(nbits_to_target(0x1d000000, t)); // zero
+    TEST_ASSERT_FALSE(nbits_to_target(0x21010000, t)); // overflow
 }

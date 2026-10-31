@@ -901,6 +901,24 @@ static esp_err_t POST_restart(httpd_req_t * req)
     return ESP_OK;
 }
 
+static esp_err_t DELETE_system_block(httpd_req_t * req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    SYSTEM_clear_block_info(GLOBAL_STATE);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"success\":true}");
+    return ESP_OK;
+}
+
 // Snapshot of a pool's last decoded coinbase transaction. Returns NULL when
 // that pool has not seen a decodable mining.notify yet.
 static cJSON * create_coinbase_json(int pool_id)
@@ -1065,6 +1083,13 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_nonce_diff);
     cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);
     cJSON_AddNumberToObject(root, "stratumDiff", GLOBAL_STATE->stratum_difficulty);
+
+    system_block_info_t block_info;
+    SYSTEM_get_block_info(GLOBAL_STATE, &block_info);
+    cJSON_AddNumberToObject(root, "blocksFound", block_info.count);
+    cJSON_AddStringToObject(root, "lastBlockHash", block_info.hash);
+    cJSON_AddStringToObject(root, "lastBlockStatus", SYSTEM_block_status_string(block_info.status));
+    cJSON_AddNumberToObject(root, "lastBlockTime", block_info.time);
 
     cJSON_AddNumberToObject(root, "isUsingFallbackStratum", GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback);
     cJSON_AddBoolToObject(root, "poolsUnavailable", GLOBAL_STATE->SYSTEM_MODULE.pools_unavailable);
@@ -1631,7 +1656,7 @@ esp_err_t start_rest_server(void * pvParameters)
     config.stack_size = 8192;
     // Leave descriptors available for DNS, Stratum and outbound services.
     config.max_open_sockets = 8;
-    config.max_uri_handlers = 28;
+    config.max_uri_handlers = 30;
     config.lru_purge_enable = true;
     config.keep_alive_enable = true;
     config.keep_alive_idle = 30;
@@ -1701,6 +1726,14 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_uri_t system_restart_options_uri = {
         .uri = "/api/system/restart", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
     httpd_register_uri_handler(server, &system_restart_options_uri);
+
+    httpd_uri_t system_block_delete_uri = {
+        .uri = "/api/system/block", .method = HTTP_DELETE, .handler = DELETE_system_block, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &system_block_delete_uri);
+
+    httpd_uri_t system_block_options_uri = {
+        .uri = "/api/system/block", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
+    httpd_register_uri_handler(server, &system_block_options_uri);
 
     httpd_uri_t update_system_settings_uri = {
         .uri = "/api/system", .method = HTTP_PATCH, .handler = PATCH_update_settings, .user_ctx = rest_context};

@@ -151,3 +151,15 @@
   .chart-card, .status-card, .info-card, .metric-card, .coinbase-card { padding: 0.5rem; }
   .voltage-marker .marker-label { font-size: 0.5rem; padding: 0.1rem 0.2rem; }
 }
+
+.block-found {
+  @extend %base-card; --accent: 245, 158, 11;
+  display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;
+  border-color: rgba(var(--accent), .5); background: linear-gradient(135deg, rgba(var(--accent), .15), rgba(30, 41, 59, .95));
+  &.block-confirmed { --accent: 16, 185, 129; }
+  &.block-orphaned { --accent: 239, 68, 68; }
+  i { font-size: 2rem; color: rgb(var(--accent)); }
+  b { display: block; font-size: 1.125rem; color: var(--text-primary); margin-bottom: .25rem; }
+  div { min-width: 0; display: flex; flex-wrap: wrap; gap: .25rem 1rem; color: var(--text-secondary); font-size: .875rem; }
+  a { color: #818cf8; font-family: monospace; }
+}

@@ -28,6 +28,8 @@
 #include "vcore.h"
 #include "ThermalMonitoring.h"
 #include "sv2_protocol.h"
+#include "mining.h"
+#include "utils.h"
 
 static const char * TAG = "SystemModule";
 
@@ -40,11 +42,15 @@ static esp_netif_t * netif;
 static TimerHandle_t led_timer_1 = NULL;
 static TimerHandle_t led_timer_2 = NULL;
 static pthread_mutex_t led_blink_lock = PTHREAD_MUTEX_INITIALIZER;
+// Guards the last_block_* fields, written by the ASIC result and job tasks
+// and read by the HTTP server.
+static pthread_mutex_t block_lock = PTHREAD_MUTEX_INITIALIZER;
 
 //local function prototypes
 static esp_err_t ensure_overheat_mode_config();
 
 static void _check_for_best_diff(GlobalState * GLOBAL_STATE, double diff, uint8_t job_id);
+static void _load_block_state(SystemModule * module);
 static void _suffix_string(uint64_t val, char * buf, size_t bufsiz, int sigdigits);
 
 void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
@@ -58,7 +64,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->best_session_nonce_diff = 0;
     module->start_time = esp_timer_get_time();
     module->lastClockSync = 0;
-    module->FOUND_BLOCK = false;
+    _load_block_state(module);
 
     GLOBAL_STATE->stratum_mux = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
     GLOBAL_STATE->send_uid = 1;
@@ -345,9 +351,181 @@ void SYSTEM_notify_new_ntime(GlobalState * GLOBAL_STATE, uint32_t ntime)
     settimeofday(&tv, NULL);
 }
 
-void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, uint8_t job_id)
+// Hashes are kept in raw digest order and stored in NVS in display order
+// (byte-reversed hex), which is what block explorers show.
+static void _hash_to_display_hex(const uint8_t hash[32], char out[65])
 {
+    uint8_t tmp[32];
+    memcpy(tmp, hash, 32);
+    reverse_bytes(tmp, 32);
+    bin2hex(tmp, 32, out, 65);
+}
+
+static bool _load_hash(const char * key, uint8_t out[32])
+{
+    memset(out, 0, 32);
+    char * hex = nvs_config_get_string(key, "");
+    bool ok = hex != NULL && strlen(hex) == 64 && hex2bin(hex, out, 32) == 32;
+    free(hex);
+    if (!ok) {
+        memset(out, 0, 32);
+        return false;
+    }
+    reverse_bytes(out, 32);
+    return true;
+}
+
+static void _load_block_state(SystemModule * module)
+{
+    module->blocks_found = nvs_config_get_u64(NVS_CONFIG_BLOCKS_FOUND, 0);
+    module->last_block_time = (uint32_t) nvs_config_get_u64(NVS_CONFIG_BLOCK_TIME, 0);
+    module->last_block_status = nvs_config_get_u16(NVS_CONFIG_BLOCK_STATUS, BLOCK_STATUS_NONE);
+    bool have_hash = _load_hash(NVS_CONFIG_BLOCK_HASH, module->last_block_hash);
+    bool have_parent = _load_hash(NVS_CONFIG_BLOCK_PARENT, module->last_block_parent);
+
+    if (module->last_block_status > BLOCK_STATUS_ORPHANED ||
+        (module->last_block_status != BLOCK_STATUS_NONE && !have_hash) ||
+        (module->last_block_status == BLOCK_STATUS_PENDING && !have_parent)) {
+        ESP_LOGW(TAG, "Inconsistent stored block state, clearing status");
+        module->last_block_status = BLOCK_STATUS_NONE;
+    }
+}
+
+static void _set_block_status(SystemModule * module, block_status_t status)
+{
+    module->last_block_status = status;
+    nvs_config_set_u16(NVS_CONFIG_BLOCK_STATUS, status);
+}
+
+static void _check_for_block(GlobalState * GLOBAL_STATE, uint8_t job_id, const uint8_t hash[32])
+{
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    const bm_job * job = GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id];
+    if (job == NULL) {
+        return;
+    }
+
+    // Exact consensus check: header hash <= target from the header's nBits
+    uint8_t target[32];
+    if (!nbits_to_target(job->target, target) || !hash_meets_target(hash, target)) {
+        return;
+    }
+
+    pthread_mutex_lock(&block_lock);
+
+    // The ASIC can report the same nonce twice; count each block once
+    if (module->last_block_status != BLOCK_STATUS_NONE && memcmp(module->last_block_hash, hash, 32) == 0) {
+        pthread_mutex_unlock(&block_lock);
+        return;
+    }
+
+    memcpy(module->last_block_hash, hash, 32);
+    memcpy(module->last_block_parent, job->prev_block_hash, 32);
+    module->last_block_time = job->ntime;
+    module->blocks_found++;
+
+    char hash_hex[65];
+    char parent_hex[65];
+    _hash_to_display_hex(module->last_block_hash, hash_hex);
+    _hash_to_display_hex(module->last_block_parent, parent_hex);
+
+    nvs_config_set_string(NVS_CONFIG_BLOCK_HASH, hash_hex);
+    nvs_config_set_string(NVS_CONFIG_BLOCK_PARENT, parent_hex);
+    nvs_config_set_u64(NVS_CONFIG_BLOCK_TIME, module->last_block_time);
+    nvs_config_set_u64(NVS_CONFIG_BLOCKS_FOUND, module->blocks_found);
+    _set_block_status(module, BLOCK_STATUS_PENDING);
+
+    pthread_mutex_unlock(&block_lock);
+
+    ESP_LOGI(TAG, "FOUND BLOCK!!! hash %s (block #%" PRIu64 " found by this device)", hash_hex, module->blocks_found);
+}
+
+void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, uint8_t job_id, const uint8_t hash[32])
+{
+    // Checked before the best-diff bookkeeping, which returns early when the
+    // share doesn't beat the stored all-time best
+    _check_for_block(GLOBAL_STATE, job_id, hash);
     _check_for_best_diff(GLOBAL_STATE, found_diff, job_id);
+}
+
+void SYSTEM_notify_new_prev_hash(GlobalState * GLOBAL_STATE, const uint8_t prev_hash[32])
+{
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    pthread_mutex_lock(&block_lock);
+
+    if (module->last_block_status != BLOCK_STATUS_PENDING) {
+        pthread_mutex_unlock(&block_lock);
+        return;
+    }
+
+    if (memcmp(prev_hash, module->last_block_hash, 32) == 0) {
+        // Pool is now mining on top of our block
+        _set_block_status(module, BLOCK_STATUS_CONFIRMED);
+        pthread_mutex_unlock(&block_lock);
+        ESP_LOGI(TAG, "Block confirmed: pool is building on our block");
+        return;
+    }
+
+    if (memcmp(prev_hash, module->last_block_parent, 32) != 0) {
+        // The tip moved to something that is neither our block nor its parent
+        _set_block_status(module, BLOCK_STATUS_ORPHANED);
+        pthread_mutex_unlock(&block_lock);
+        ESP_LOGW(TAG, "Block not built on: chain moved to a different block");
+        return;
+    }
+
+    pthread_mutex_unlock(&block_lock);
+}
+
+void SYSTEM_get_block_info(GlobalState * GLOBAL_STATE, system_block_info_t * out)
+{
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    pthread_mutex_lock(&block_lock);
+    out->count = module->blocks_found;
+    out->status = (block_status_t) module->last_block_status;
+    out->time = module->last_block_time;
+    if (module->last_block_status != BLOCK_STATUS_NONE) {
+        _hash_to_display_hex(module->last_block_hash, out->hash);
+    } else {
+        out->hash[0] = '\0';
+    }
+    pthread_mutex_unlock(&block_lock);
+}
+
+void SYSTEM_clear_block_info(GlobalState * GLOBAL_STATE)
+{
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    pthread_mutex_lock(&block_lock);
+    module->blocks_found = 0;
+    module->last_block_time = 0;
+    memset(module->last_block_hash, 0, 32);
+    memset(module->last_block_parent, 0, 32);
+
+    nvs_config_set_u64(NVS_CONFIG_BLOCKS_FOUND, 0);
+    nvs_config_set_u64(NVS_CONFIG_BLOCK_TIME, 0);
+    nvs_config_set_string(NVS_CONFIG_BLOCK_HASH, "");
+    nvs_config_set_string(NVS_CONFIG_BLOCK_PARENT, "");
+    _set_block_status(module, BLOCK_STATUS_NONE);
+    pthread_mutex_unlock(&block_lock);
+
+    ESP_LOGI(TAG, "Found-block data cleared");
+}
+
+const char * SYSTEM_block_status_string(block_status_t status)
+{
+    switch (status) {
+    case BLOCK_STATUS_PENDING:
+        return "pending";
+    case BLOCK_STATUS_CONFIRMED:
+        return "confirmed";
+    case BLOCK_STATUS_ORPHANED:
+        return "orphaned";
+    default:
+        return "none";
+    }
 }
 
 static double _calculate_network_difficulty(uint32_t nBits)
@@ -382,11 +560,7 @@ static void _check_for_best_diff(GlobalState * GLOBAL_STATE, double diff, uint8_
     _suffix_string((uint64_t) diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
 
     double network_diff = _calculate_network_difficulty(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->target);
-    if (diff > network_diff) {
-        module->FOUND_BLOCK = true;
-        ESP_LOGI(TAG, "FOUND BLOCK!!!!!!!!!!!!!!!!!!!!!! %f > %f", diff, network_diff);
-    }
-    ESP_LOGI(TAG, "Network diff: %f", network_diff);
+    ESP_LOGI(TAG, "New best diff %s, network diff: %f", module->best_diff_string, network_diff);
 }
 
 /* Convert a uint64_t value into a truncated string for displaying with its

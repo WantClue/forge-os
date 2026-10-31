@@ -70,6 +70,18 @@
         </div>
     </div>
 
+    <div class="col-12 settings-update-column" *ngIf="(info$ | async) as info">
+        <div class="card settings-update-card" *ngIf="info.blocksFound > 0 && !blockDataCleared">
+            <h2>Found Blocks</h2>
+            <div class="mb-3">
+                {{info.blocksFound}} block(s) found, last one {{info.lastBlockStatus}}.
+                <small class="block mt-1">Useful after testing against regtest or testnet.</small>
+            </div>
+            <p-button label="Delete found-block data" icon="pi pi-trash" styleClass="p-button-danger p-button-outlined"
+                (onClick)="clearFoundBlocks()"></p-button>
+        </div>
+    </div>
+
     <div class="col-12 settings-manual-toggle">
         <p-button
             [label]="showManualUpdate ? 'Hide customized firmware install' : 'Install customized firmware'"
