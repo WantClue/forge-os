@@ -20,30 +20,11 @@ export class EditComponent implements OnInit, OnDestroy {
 
   public savedChanges: boolean = false;
   public settingsUnlocked: boolean = false;
-  public eASICModel = eASICModel;
   public ASICModel!: eASICModel;
   public restrictedModels: eASICModel[] = Object.values(eASICModel)
     .filter((v): v is eASICModel => typeof v === 'string');
 
   @Input() uri = '';
-
-  public BM1370DropdownFrequency = [
-    { name: '400', value: 400 },
-    { name: '490', value: 490 },
-    { name: '525 (default)', value: 525 },
-    { name: '550', value: 550 },
-    { name: '575', value: 575 },
-    //{ name: '596', value: 596 },
-    { name: '600', value: 600 },
-  ];
-
-  public BM1370CoreVoltage = [
-    { name: '1000', value: 1000 },
-    { name: '1060', value: 1060 },
-    { name: '1100', value: 1100 },
-    { name: '1150 (default)', value: 1150 },
-    { name: '1200', value: 1200 },
-  ];
 
   private destroy$ = new Subject<void>();
 
@@ -196,54 +177,6 @@ export class EditComponent implements OnInit, OnDestroy {
           this.toastr.error(errorMessage, 'Error');
         }
       });
-  }
-
-  getDropdownFrequency() {
-    // Get base frequency options based on ASIC model
-    let options = [];
-    switch(this.ASICModel) {
-        case this.eASICModel.BM1370: options = [...this.BM1370DropdownFrequency]; break;
-        default: return [];
-    }
-
-    // Get current frequency value from form
-    const currentFreq = this.form?.get('frequency')?.value;
-
-    // If current frequency exists and isn't in the options
-    if (currentFreq && !options.some(opt => opt.value === currentFreq)) {
-        options.push({
-            name: `${currentFreq} (Custom)`,
-            value: currentFreq
-        });
-        // Sort options by frequency value
-        options.sort((a, b) => a.value - b.value);
-    }
-
-    return options;
-  }
-
-  getCoreVoltage() {
-    // Get base voltage options based on ASIC model
-    let options = [];
-    switch(this.ASICModel) {
-        case this.eASICModel.BM1370: options = [...this.BM1370CoreVoltage]; break;
-        default: return [];
-    }
-
-    // Get current voltage value from form
-    const currentVoltage = this.form?.get('coreVoltage')?.value;
-
-    // If current voltage exists and isn't in the options
-    if (currentVoltage && !options.some(opt => opt.value === currentVoltage)) {
-        options.push({
-            name: `${currentVoltage} (Custom)`,
-            value: currentVoltage
-        });
-        // Sort options by voltage value
-        options.sort((a, b) => a.value - b.value);
-    }
-
-    return options;
   }
 
   setPerformanceMode(mode: 'eco' | 'medium' | 'power') {
