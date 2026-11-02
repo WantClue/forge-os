@@ -7,6 +7,7 @@ SRCS
     "segwit_addr.c"
     "base58.c"
     "sha256.c"
+    "job_id_filter.c"
 
 INCLUDE_DIRS
     "include"

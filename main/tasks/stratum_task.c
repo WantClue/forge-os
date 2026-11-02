@@ -19,6 +19,7 @@
 #include "esp_timer.h"
 #include "coinbase_decoder.h"
 #include "stratum_v2_client.h"
+#include "job_id_filter.h"
 
 #define STRATUM_DIFFICULTY CONFIG_STRATUM_DIFFICULTY
 
@@ -43,6 +44,11 @@
 static const char * TAG = "stratum_task";
 
 static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192.0};
+
+// Job ids seen in the current V1 session, so a re-sent notify isn't mined
+// twice. Each filter is only touched by the task running that session.
+static job_id_filter_t s_v1_job_filter;
+static job_id_filter_t s_dual_job_filters[POOL_COUNT];
 
 struct timeval tcp_snd_timeout = {
     .tv_sec = 5,
@@ -807,6 +813,14 @@ static void handle_dual_pool_message(GlobalState *GLOBAL_STATE, int pool_id, Str
             pool->connect_failures = 0;
             dual_pool_update_availability(GLOBAL_STATE);
         }
+
+        if (!job_id_filter_accept(&s_dual_job_filters[pool_id], message->mining_notification->job_id,
+                                  message->mining_notification->clean_jobs)) {
+            ESP_LOGW(TAG, "%s pool: ignoring duplicate notify for job %s",
+                     stratum_pool_label(pool_id), message->mining_notification->job_id);
+            return;
+        }
+
         SYSTEM_notify_new_ntime(GLOBAL_STATE, message->mining_notification->ntime);
 
         if (message->mining_notification->clean_jobs) {
@@ -982,6 +996,7 @@ static void stratum_dual_pool_worker(void *pvParameters)
 
         stratum_reset_pool_uid(GLOBAL_STATE, pool_id);
         invalidate_pool_work(GLOBAL_STATE, pool_id);
+        job_id_filter_reset(&s_dual_job_filters[pool_id]);
 
         // Held across the whole handshake so a share submit can't interleave
         // its write between our setup messages.
@@ -1105,6 +1120,7 @@ static esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, int pool_id, bool *go
 
     stratum_reset_uid(GLOBAL_STATE);
     cleanQueue(GLOBAL_STATE);
+    job_id_filter_reset(&s_v1_job_filter);
 
     ///// Start Stratum Action
     // Held across the whole handshake so a share submit can't interleave
@@ -1167,6 +1183,13 @@ static esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, int pool_id, bool *go
 
         if (stratum_api_v1_message.method == MINING_NOTIFY) {
             *got_work = true;
+            mining_notify *notification = stratum_api_v1_message.mining_notification;
+            if (!job_id_filter_accept(&s_v1_job_filter, notification->job_id, notification->clean_jobs)) {
+                // Left in the message, so STRATUM_V1_reset_message frees it.
+                ESP_LOGW(TAG, "Ignoring duplicate notify for job %s", notification->job_id);
+                STRATUM_V1_reset_message(&stratum_api_v1_message);
+                continue;
+            }
             stratum_api_v1_message.mining_notification->difficulty = SYSTEM_TASK_MODULE.stratum_difficulty;
             stratum_enqueue_notify(GLOBAL_STATE, pool_id, stratum_api_v1_message.mining_notification,
                                    GLOBAL_STATE->extranonce_str, GLOBAL_STATE->extranonce_2_len);
