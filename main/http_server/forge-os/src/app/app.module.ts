@@ -32,9 +32,6 @@ import { ModalComponent } from './components/modal/modal.component';
 import { PrimeNGModule } from './prime-ng.module';
 import { MessageModule } from 'primeng/message';
 import { TooltipModule } from 'primeng/tooltip';
-import { DialogModule } from 'primeng/dialog';
-import { DynamicDialogModule, DialogService as PrimeDialogService } from 'primeng/dynamicdialog';
-import { DialogService, DialogListComponent } from './services/dialog.service';
 
 const components = [
   AppComponent,
@@ -61,8 +58,7 @@ const components = [
     SatsPipe,
     TruncateMiddlePipe,
     PoolComponent,
-    ModalComponent,
-    DialogListComponent
+    ModalComponent
   ],
   imports: [
     BrowserModule,
@@ -78,9 +74,7 @@ const components = [
     PrimeNGModule,
     AppLayoutModule,
     MessageModule,
-    TooltipModule,
-    DialogModule,
-    DynamicDialogModule
+    TooltipModule
   ],
   providers: [
     providePrimeNG({
@@ -97,9 +91,7 @@ const components = [
         }
       }
     }),
-    { provide: LocationStrategy, useClass: HashLocationStrategy },
-    DialogService,
-    PrimeDialogService
+    { provide: LocationStrategy, useClass: HashLocationStrategy }
   ],
   bootstrap: [AppComponent]
 })

@@ -118,27 +118,12 @@ export class LayoutService {
         }
     }
 
-    showProfileSidebar() {
-        this.state.profileSidebarVisible = !this.state.profileSidebarVisible;
-        if (this.state.profileSidebarVisible) {
-            this.overlayOpen.next(null);
-        }
-    }
-
-    showConfigSidebar() {
-        this.state.configSidebarVisible = true;
-    }
-
     isOverlay() {
         return this.config().menuMode === 'overlay';
     }
 
     isDesktop() {
         return window.innerWidth > 991;
-    }
-
-    isMobile() {
-        return !this.isDesktop();
     }
 
     onConfigUpdate() {

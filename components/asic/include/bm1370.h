@@ -9,9 +9,6 @@
 
 #define BM1370_ASIC_DIFFICULTY 256
 
-#define BM1370_VERSION_ROLL_SIZE 65536  // 2^16 (BIP320 version-rolling space)
-#define BM1370_TIMEOUT_PERCENT   0.5f   // ~70s interval @ 490MHz, under stratum ~100s cap
-
 #define BM1370_SERIALTX_DEBUG false
 #define BM1370_SERIALRX_DEBUG false
 #define BM1370_DEBUG_WORK false //causes insane amount of debug output

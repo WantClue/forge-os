@@ -45,54 +45,6 @@ export class HomeComponent {
     this.initializeChart()
   }
 
-  private updateChartColors() {
-    // Modern color scheme for dark theme
-    const textColor = '#f1f5f9'
-    const textColorSecondary = '#94a3b8'
-    const surfaceBorder = '#334155'
-    const primaryColor = '#6366f1'
-    const temperatureColor = '#ea580c'
-
-    // Update chart colors with modern gradients
-    if (this.chartData && this.chartData.datasets) {
-      // Hash rate dataset with gradient
-      this.chartData.datasets[0].backgroundColor = 'rgba(99, 102, 241, 0.1)'
-      this.chartData.datasets[0].borderColor = primaryColor
-      this.chartData.datasets[0].fill = 'start'
-
-      // Temperature dataset with gradient
-      if (this.chartData.datasets[1]) {
-        this.chartData.datasets[1].backgroundColor = 'rgba(234, 88, 12, 0.1)'
-        this.chartData.datasets[1].borderColor = temperatureColor
-        this.chartData.datasets[1].fill = 'start'
-      }
-    }
-
-    // Update chart options with modern styling
-    if (this.chartOptions) {
-      this.chartOptions.plugins.legend.labels.color = textColor
-      this.chartOptions.plugins.legend.labels.font = {
-        size: 14,
-        weight: 500
-      }
-
-      this.chartOptions.scales.x.ticks.color = textColorSecondary
-      this.chartOptions.scales.x.grid.color = surfaceBorder
-      this.chartOptions.scales.x.grid.drawBorder = false
-
-      this.chartOptions.scales.y.ticks.color = textColorSecondary
-      this.chartOptions.scales.y.grid.color = surfaceBorder
-      this.chartOptions.scales.y.grid.drawBorder = false
-
-      this.chartOptions.scales.y2.ticks.color = textColorSecondary
-      this.chartOptions.scales.y2.grid.drawOnChartArea = false
-      this.chartOptions.scales.y2.grid.color = surfaceBorder
-    }
-
-    // Force chart update
-    this.chartData = { ...this.chartData }
-  }
-
   private initializeChart() {
     // Modern color scheme for dark theme
     const textColor = '#f1f5f9'

@@ -12,25 +12,6 @@
   top: 1rem;
 }
 
-// Performance Mode Section
-.performance-mode {
-  margin-bottom: 2rem;
-
-  h1 {
-    color: var(--text-primary);
-    font-weight: 700;
-    margin-bottom: 1rem;
-    text-align: center;
-  }
-
-  .performance-buttons {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-}
-
 // Performance Mode Buttons with Color Coding
 .performance-btn {
   display: flex;
@@ -42,6 +23,12 @@
 
   i {
     font-size: 1.1rem;
+  }
+
+  .eco-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
   }
 
   &:hover {
@@ -269,27 +256,6 @@
   }
 }
 
-// Fan Speed Label
-.fan-speed-label {
-  color: var(--text-primary);
-  font-weight: 500;
-  margin-bottom: 0.75rem;
-  display: block;
-
-  b {
-    font-weight: 600;
-    margin-left: 0.5rem;
-
-    &[style*="color:red"] {
-      color: var(--error-color) !important;
-    }
-
-    &[style*="color:#F2A900"] {
-      color: var(--warning-color) !important;
-    }
-  }
-}
-
 // Alert Messages
 ::ng-deep .p-message {
   border-radius: 0.75rem !important;
@@ -306,86 +272,6 @@
 
     .p-message-text {
       font-weight: 500;
-    }
-  }
-}
-
-// Action Buttons Section
-.action-buttons {
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--card-border);
-
-  .save-section {
-    margin-bottom: 1.5rem;
-
-    .save-info {
-      color: var(--text-secondary);
-      font-weight: 500;
-      font-size: 0.875rem;
-      margin-left: 1rem;
-      vertical-align: middle;
-    }
-  }
-
-  .control-buttons {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-
-    .p-button {
-      min-width: 120px;
-    }
-  }
-}
-
-// Overheat Mode Section
-.overheat-section {
-  margin-bottom: 2rem;
-  text-align: center;
-
-  .overheat-warning {
-    color: var(--error-color);
-    font-weight: 600;
-    font-size: 0.875rem;
-    margin-top: 0.75rem;
-  }
-}
-
-// Grid Layout Improvements
-.p-grid {
-  .p-col-12 {
-    padding: 0.5rem;
-  }
-}
-
-// Responsive Design
-@media (max-width: 768px) {
-  .performance-buttons {
-    flex-direction: column;
-    align-items: center;
-
-    .p-button {
-      width: 100%;
-      max-width: 200px;
-    }
-  }
-
-  .control-buttons {
-    flex-direction: column;
-
-    .p-button {
-      width: 100%;
-    }
-  }
-
-  .save-section {
-    text-align: center;
-
-    .save-info {
-      margin-left: 0;
-      margin-top: 0.5rem;
-      display: block;
     }
   }
 }

@@ -14,7 +14,12 @@
                             class="performance-btn eco-mode p-button-rounded py-3"
                             style="min-width: 140px;"
                             (click)="setPerformanceMode('eco')">
-                        <i class="pi pi-leaf mr-2"></i>
+                        <!-- PrimeIcons has no leaf icon, so draw one inline -->
+                        <svg class="eco-icon mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+                            <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+                        </svg>
                         <span>Eco</span>
                     </button>
                     <button pButton type="button"
@@ -35,7 +40,7 @@
             </div>
         </ng-container>
 
-        <!-- Dropdown Menus - Show only when overclock mode is enabled -->
+        <!-- Frequency / voltage inputs - shown only when overclock mode is enabled -->
 
         <ng-container *ngIf="settingsUnlocked === true">
 
@@ -74,7 +79,7 @@
         </div>
 
         <div *ngIf="form.controls['autofanspeed'].value != true">
-            <div class="col-12" *ngIf="form.controls['autofanspeed'].value != true">
+            <div class="col-12">
                 <label>Fan Speed {{form.controls['manualFanSpeed'].value}}%
                     <b *ngIf="form.controls['manualFanSpeed'].value < 33" style="color:red">Danger: Could Cause
                         Overheating</b> <b *ngIf="form.controls['manualFanSpeed'].value == 100" style="color:	#F2A900">S19
@@ -92,7 +97,7 @@
 
         <div class="mt-2">
 
-            <button *ngIf="settingsUnlocked" pButton pButton="p-button-danger" (click)="toggleOverclockMode(false)"
+            <button *ngIf="settingsUnlocked" pButton (click)="toggleOverclockMode(false)"
                     class="p-button-danger" pTooltip="Return to safe preset values only">
                 Disable Overclock Mode
             </button>

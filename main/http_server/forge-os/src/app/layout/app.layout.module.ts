@@ -11,13 +11,11 @@ import { PrimeNGModule } from '../prime-ng.module';
 import { AppFooterComponent } from './app.footer.component';
 import { AppLayoutComponent } from './app.layout.component';
 import { AppMenuComponent } from './app.menu.component';
-import { AppMenuitemComponent } from './app.menuitem.component';
 import { AppSidebarComponent } from './app.sidebar.component';
 import { AppTopBarComponent } from './app.topbar.component';
 
 @NgModule({
     declarations: [
-        AppMenuitemComponent,
         AppTopBarComponent,
         AppFooterComponent,
         AppMenuComponent,

@@ -1698,14 +1698,6 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_uri_t ap_page_get_uri = {.uri = "/ipinfo", .method = HTTP_GET, .handler = rest_ap_page_handler, .user_ctx = rest_context};
     httpd_register_uri_handler(server, &ap_page_get_uri);
 
-    httpd_uri_t swarm_options_uri = {
-        .uri = "/api/swarm",
-        .method = HTTP_OPTIONS,
-        .handler = handle_options_request,
-        .user_ctx = NULL,
-    };
-    httpd_register_uri_handler(server, &swarm_options_uri);
-
     /* URI handlers for the accepted-share LED */
     httpd_uri_t system_led_get_uri = {
         .uri = "/api/system/led", .method = HTTP_GET, .handler = GET_system_led, .user_ctx = rest_context};

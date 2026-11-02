@@ -18,6 +18,7 @@
 #include "sv2_noise.h"
 #include "libbase58.h"
 #include "utils.h"
+#include "job_id_filter.h"
 
 static const char *TAG = "stratum_v2";
 
@@ -50,6 +51,10 @@ typedef struct {
     mining_notify *pending[SV2_PENDING_JOBS];
     uint32_t pending_job_id[SV2_PENDING_JOBS];
     int pending_next;
+
+    // Job ids already handed to the miner since the last SetNewPrevHash, so
+    // a repeated job isn't mined twice. Zeroed (= empty) by the calloc.
+    job_id_filter_t job_filter;
 } sv2_conn_t;
 
 // The live session, published together with GLOBAL_STATE->transport under
@@ -197,6 +202,12 @@ static mining_notify *take_pending_job(sv2_conn_t *conn, uint32_t job_id)
 static void activate_job(GlobalState *GLOBAL_STATE, sv2_conn_t *conn, mining_notify *notify,
                          uint32_t ntime, bool clean_jobs)
 {
+    if (!job_id_filter_accept(&conn->job_filter, notify->job_id, clean_jobs)) {
+        ESP_LOGW(TAG, "Ignoring duplicate V2 job %s", notify->job_id);
+        STRATUM_V1_free_mining_notify(notify);
+        return;
+    }
+
     free(notify->prev_block_hash);
     notify->prev_block_hash = prev_hash_to_v1_hex(conn->prev_hash);
     if (notify->prev_block_hash == NULL) {
