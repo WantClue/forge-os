@@ -18,7 +18,6 @@ export class EditComponent implements OnInit, OnDestroy {
 
   public form!: FormGroup;
 
-  public savedChanges: boolean = false;
   public settingsUnlocked: boolean = false;
   public ASICModel!: eASICModel;
   public restrictedModels: eASICModel[] = Object.values(eASICModel)
@@ -120,29 +119,18 @@ export class EditComponent implements OnInit, OnDestroy {
 
     const form = this.form.getRawValue();
 
-    if (form.stratumPassword === '*****') {
-      delete form.stratumPassword;
-    }
-
     this.systemService.updateSystem(this.uri, form)
       .pipe(this.loadingService.lockUIUntilComplete())
       .subscribe({
         next: () => {
           const successMessage = this.uri ? `Saved settings for ${this.uri}` : 'Saved settings';
           this.toastr.success(successMessage, 'Success!');
-          this.savedChanges = true;
         },
         error: (err: HttpErrorResponse) => {
           const errorMessage = this.uri ? `Could not save settings for ${this.uri}. ${err.message}` : `Could not save settings. ${err.message}`;
           this.toastr.error(errorMessage, 'Error');
-          this.savedChanges = false;
         }
       });
-  }
-
-  showWifiPassword: boolean = false;
-  toggleWifiPasswordVisibility() {
-    this.showWifiPassword = !this.showWifiPassword;
   }
 
   disableOverheatMode() {
@@ -162,21 +150,6 @@ export class EditComponent implements OnInit, OnDestroy {
     } else {
       console.log('🔒 Overclock mode disabled. Using safe preset values only.');
     }
-  }
-
-  public restart() {
-    this.systemService.restart(this.uri)
-      .pipe(this.loadingService.lockUIUntilComplete())
-      .subscribe({
-        next: () => {
-          const successMessage = this.uri ? `Miner at ${this.uri} restarted` : 'Miner restarted';
-          this.toastr.success(successMessage, 'Success');
-        },
-        error: (err: HttpErrorResponse) => {
-          const errorMessage = this.uri ? `Failed to restart device at ${this.uri}. ${err.message}` : `Failed to restart device. ${err.message}`;
-          this.toastr.error(errorMessage, 'Error');
-        }
-      });
   }
 
   setPerformanceMode(mode: 'eco' | 'medium' | 'power') {
