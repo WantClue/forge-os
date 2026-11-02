@@ -35,7 +35,6 @@ export class EditComponent implements OnInit, OnDestroy {
     { name: '575', value: 575 },
     //{ name: '596', value: 596 },
     { name: '600', value: 600 },
-    { name: '625', value: 625 },
   ];
 
   public BM1370CoreVoltage = [
@@ -44,7 +43,6 @@ export class EditComponent implements OnInit, OnDestroy {
     { name: '1100', value: 1100 },
     { name: '1150 (default)', value: 1150 },
     { name: '1200', value: 1200 },
-    { name: '1250', value: 1250 },
   ];
 
   private destroy$ = new Subject<void>();
@@ -263,8 +261,8 @@ export class EditComponent implements OnInit, OnDestroy {
         coreVoltage = 1150; // default
         break;
       case 'power':
-        frequency = 636;
-        coreVoltage = 1160;
+        frequency = 610;
+        coreVoltage = 1200;
         break;
     }
 
