@@ -10,6 +10,7 @@
 #include "string.h"
 
 #include "asic.h"
+#include "system.h"
 
 static const char *TAG = "create_jobs_task";
 
@@ -294,6 +295,9 @@ static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification
     }
 
     bm_job next_job = construct_bm_job(notification, merkle_root, version_mask);
+
+    // Lets a pending found block resolve to confirmed/orphaned
+    SYSTEM_notify_new_prev_hash(GLOBAL_STATE, next_job.prev_block_hash);
 
     bm_job *queued_next_job = malloc(sizeof(bm_job));
     if (queued_next_job == NULL) {

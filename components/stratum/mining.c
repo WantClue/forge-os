@@ -138,14 +138,13 @@ static const double truediffone = 2695953529101130949315647634472399133601089873
 /* testing a nonce and return the diff - 0 means invalid */
 double test_nonce_value(const bm_job *job, const uint32_t nonce, const uint32_t rolled_version)
 {
-    double d64, s64, ds;
-    unsigned char header[80];
+    uint8_t hash[32];
+    return test_nonce_hash(job, nonce, rolled_version, hash);
+}
 
-    // // TODO: use the midstate hash instead of hashing the whole header
-    // uint32_t rolled_version = job->version;
-    // for (int i = 0; i < midstate_index; i++) {
-    //     rolled_version = increment_bitmask(rolled_version, job->version_mask);
-    // }
+double test_nonce_hash(const bm_job *job, const uint32_t nonce, const uint32_t rolled_version, uint8_t hash_out[32])
+{
+    unsigned char header[80];
 
     // copy data from job to header
     memcpy(header, &rolled_version, 4);
@@ -156,17 +155,62 @@ double test_nonce_value(const bm_job *job, const uint32_t nonce, const uint32_t 
     memcpy(header + 76, &nonce, 4);
 
     unsigned char hash_buffer[32];
-    unsigned char hash_result[32];
 
     // double hash the header
     sha256(header, 80, hash_buffer);
-    sha256(hash_buffer, 32, hash_result);
+    sha256(hash_buffer, 32, hash_out);
 
-    d64 = truediffone;
-    s64 = le256todouble(hash_result);
-    ds = d64 / s64;
+    return truediffone / le256todouble(hash_out);
+}
 
-    return ds;
+bool nbits_to_target(uint32_t nbits, uint8_t target_out[32])
+{
+    memset(target_out, 0, 32);
+
+    uint32_t mantissa = nbits & 0x007fffff;
+    int exponent = (int)(nbits >> 24);
+
+    // Sign bit set or zero mantissa: no hash can meet it
+    if ((nbits & 0x00800000) || mantissa == 0) {
+        return false;
+    }
+
+    // target = mantissa * 256^(exponent - 3); bytes below position 0 fall off
+    for (int i = 0; i < 3; i++) {
+        uint8_t byte = (mantissa >> (8 * i)) & 0xff;
+        int pos = exponent - 3 + i;
+        if (pos < 0) {
+            continue;
+        }
+        if (pos >= 32) {
+            if (byte != 0) {
+                memset(target_out, 0, 32);
+                return false; // overflow
+            }
+            continue;
+        }
+        target_out[pos] = byte;
+    }
+
+    for (int i = 0; i < 32; i++) {
+        if (target_out[i] != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool hash_meets_target(const uint8_t hash[32], const uint8_t target[32])
+{
+    for (int i = 31; i >= 0; i--) {
+        if (hash[i] < target[i]) {
+            return true;
+        }
+        if (hash[i] > target[i]) {
+            return false;
+        }
+    }
+    return true; // equal
 }
 
 uint32_t increment_bitmask(const uint32_t value, const uint32_t mask)

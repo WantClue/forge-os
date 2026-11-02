@@ -26,6 +26,8 @@ interface IStratumPoolInfo {
     coinbase?: ICoinbase;
 }
 
+export type BlockStatus = 'none' | 'pending' | 'confirmed' | 'orphaned';
+
 export interface ISystemInfo {
 
     power: number,
@@ -39,6 +41,10 @@ export interface ISystemInfo {
     bestDiff: number,
     bestSessionDiff: string,
     stratumDiff: number,
+    blocksFound: number,
+    lastBlockHash: string,
+    lastBlockStatus: BlockStatus,
+    lastBlockTime: number,
     freeHeap: number,
     freeHeapInternal: number,
     freeHeapSpiram: number,

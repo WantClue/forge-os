@@ -30,6 +30,24 @@
         text="🔌 {{info.power_fault}} - Check your Power Supply">
     </p-message>
 
+    <!-- Block found -->
+    <div *ngIf="info.blocksFound > 0" class="block-found" [ngClass]="'block-' + info.lastBlockStatus">
+        <i class="pi" [ngClass]="info.lastBlockStatus === 'orphaned' ? 'pi-exclamation-triangle' : 'pi-box'"></i>
+        <span>
+            <b [ngSwitch]="info.lastBlockStatus">
+                <ng-container *ngSwitchCase="'confirmed'">Your BitForge found a Bitcoin block!</ng-container>
+                <ng-container *ngSwitchCase="'orphaned'">Your BitForge found a block, but the chain moved on without it</ng-container>
+                <ng-container *ngSwitchDefault>Your BitForge found a block! Waiting for the network to build on it...</ng-container>
+            </b>
+            <div>
+                <span *ngIf="info.lastBlockTime">{{info.lastBlockTime * 1000 | date: 'medium'}}</span>
+                <a *ngIf="info.lastBlockHash" [href]="'https://mempool.space/block/' + info.lastBlockHash"
+                    target="_blank" rel="noopener noreferrer" [title]="info.lastBlockHash">{{info.lastBlockHash | truncateMiddle}}</a>
+                <span *ngIf="info.blocksFound > 1">{{info.blocksFound}} blocks found in total</span>
+            </div>
+        </span>
+    </div>
+
     <!-- Key Metrics Grid -->
     <div class="metrics-grid">
         <div class="metric-card hash-rate">

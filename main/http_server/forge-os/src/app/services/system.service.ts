@@ -62,6 +62,10 @@ export class SystemService {
           bestDiff: 666000000000,
           bestSessionDiff: "33M",
           stratumDiff: 8192,
+          blocksFound: 0,
+          lastBlockHash: "",
+          lastBlockStatus: "none" as const,
+          lastBlockTime: 0,
           freeHeap: 200504,
           freeHeapInternal: 150000,
           freeHeapSpiram: 50504,
@@ -134,6 +138,10 @@ export class SystemService {
 
   public restart(uri: string = '') {
     return this.httpClient.post(`${uri}/api/system/restart`, {}, {responseType: 'text'});
+  }
+
+  public clearFoundBlocks(uri: string = '') {
+    return this.httpClient.delete(`${uri}/api/system/block`);
   }
 
   public updateSystem(uri: string = '', update: any) {

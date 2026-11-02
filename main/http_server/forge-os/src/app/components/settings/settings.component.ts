@@ -403,6 +403,21 @@ export class SettingsComponent implements OnDestroy {
     setTimeout(() => check(), 5000);
   }
 
+  public blockDataCleared = false;
+
+  public clearFoundBlocks() {
+    if (!confirm('Delete all found-block data (count, last block hash and status)? This cannot be undone.')) {
+      return;
+    }
+    this.systemService.clearFoundBlocks().subscribe({
+      next: () => {
+        this.blockDataCleared = true;
+        this.toastr.success('Found-block data deleted.', 'Success');
+      },
+      error: (err: HttpErrorResponse) => this.toastr.error(`Could not delete block data. ${err.message}`, 'Error')
+    });
+  }
+
   public restart() {
     this.systemService.restart().subscribe(res => {
 
