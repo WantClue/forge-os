@@ -35,6 +35,10 @@
 #define RECOVERY_PROBE_INTERVAL_MS 30000
 // How long to wait for the power management task to bring the ASIC back.
 #define ASIC_RESUME_TIMEOUT_MS 30000
+// How long a TLS connect waits for SNTP before giving up on this attempt.
+#define CLOCK_SYNC_TIMEOUT_MS 15000
+// Any clock earlier than 2026-01-01 has not been synced yet.
+#define CLOCK_VALID_AFTER 1767225600
 
 static const char * TAG = "stratum_task";
 
@@ -602,6 +606,24 @@ void stratum_enqueue_notify(GlobalState *GLOBAL_STATE, int pool_id, mining_notif
     queue_enqueue(&GLOBAL_STATE->stratum_queue, notification);
 }
 
+// mbedTLS checks certificate dates against the system clock, so before the
+// first SNTP sync every certificate would look not yet valid.
+static bool stratum_tls_clock_ready(tls_mode tls)
+{
+    if (tls == DISABLED || time(NULL) >= CLOCK_VALID_AFTER) {
+        return true;
+    }
+    ESP_LOGI(TAG, "Waiting for SNTP before verifying the pool certificate");
+    for (int waited_ms = 0; waited_ms < CLOCK_SYNC_TIMEOUT_MS; waited_ms += 500) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+        if (time(NULL) >= CLOCK_VALID_AFTER) {
+            return true;
+        }
+    }
+    ESP_LOGE(TAG, "Clock not synced, can't check the pool certificate's validity dates");
+    return false;
+}
+
 // Connects, subscribes and authorizes, then waits for the first
 // mining.notify. Only a pool that actually hands out work counts as alive.
 static bool stratum_v1_probe_pool(GlobalState *GLOBAL_STATE, int pool_id)
@@ -609,6 +631,10 @@ static bool stratum_v1_probe_pool(GlobalState *GLOBAL_STATE, int pool_id)
     const char *url = pool_url(GLOBAL_STATE, pool_id);
     uint16_t port = pool_port(GLOBAL_STATE, pool_id);
     tls_mode tls = pool_tls(GLOBAL_STATE, pool_id);
+
+    if (!stratum_tls_clock_ready(tls)) {
+        return false;
+    }
 
     stratum_connection_info_t conn_info;
     if (stratum_resolve_address(url, port, &conn_info) != ESP_OK) {
@@ -908,6 +934,12 @@ static void stratum_dual_pool_worker(void *pvParameters)
             continue;
         }
 
+        if (!stratum_tls_clock_ready(tls)) {
+            dual_pool_failed(GLOBAL_STATE, pool_id);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            continue;
+        }
+
         ESP_LOGI(TAG, "Connecting %s pool to: stratum+tcp://%s:%d (%s)", stratum_pool_label(pool_id), stratum_url, port, conn_info.host_ip);
 
         esp_transport_handle_t transport = STRATUM_V1_transport_init(tls, cert);
@@ -1021,6 +1053,10 @@ static esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, int pool_id, bool *go
     stratum_connection_info_t conn_info;
     if (stratum_resolve_address(stratum_url, port, &conn_info) != ESP_OK) {
         ESP_LOGE(TAG, "DNS resolution failed for %s", stratum_url);
+        return ESP_FAIL;
+    }
+
+    if (!stratum_tls_clock_ready(tls)) {
         return ESP_FAIL;
     }
 

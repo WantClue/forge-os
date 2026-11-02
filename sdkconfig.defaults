@@ -29,3 +29,15 @@ CONFIG_MBEDTLS_SSL_PROTO_TLS1_3=y
 # Stratum V2: Noise transport encryption (ChaCha20-Poly1305 via PSA)
 CONFIG_MBEDTLS_CHACHA20_C=y
 CONFIG_MBEDTLS_CHACHAPOLY_C=y
+# Pool TLS: ESP-IDF bundle without the compromised eMudhra roots
+# (regenerate with ./update_ca_bundle.sh), and certificate dates are checked
+# against the SNTP clock.
+# TODO(idf-bump): upstream dropped the compromised roots on release/v6.0 and
+# master (Oct 2026); v6.0.3 and v6.1 still ship them. Once CI builds with
+# v6.0.4+ (or a v6.1.x that has the backport), delete the three
+# CERTIFICATE_BUNDLE lines below, main/certs/ and update_ca_bundle.sh.
+# Keep CONFIG_MBEDTLS_HAVE_TIME_DATE.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_NONE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="main/certs/ca_bundle.pem"
+CONFIG_MBEDTLS_HAVE_TIME_DATE=y

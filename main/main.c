@@ -13,6 +13,7 @@
 #include "create_jobs_task.h"
 #include "hashrate_monitor_task.h"
 #include "esp_netif.h"
+#include "esp_netif_sntp.h"
 #include "system.h"
 #include "http_server.h"
 #include "nvs_config.h"
@@ -181,6 +182,12 @@ void app_main(void)
     if (result_bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
         strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Connected!", 20);
+
+        // TLS (pools, GitHub OTA) checks certificate dates against this clock
+        esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+        if (esp_netif_sntp_init(&sntp_config) != ESP_OK) {
+            ESP_LOGE(TAG, "SNTP init failed, TLS connections fail until the clock is set");
+        }
     } else if (result_bits & WIFI_FAIL_BIT) {
         ESP_LOGE(TAG, "Failed to connect to SSID: %s", wifi_ssid);
         strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Failed to connect", 20);
