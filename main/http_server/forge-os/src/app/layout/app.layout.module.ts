@@ -1,11 +1,7 @@
-import { HttpClientModule } from '@angular/common/http';
 import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { BrowserModule } from '@angular/platform-browser';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { RouterModule } from '@angular/router';
-import { InputTextModule } from 'primeng/inputtext';
-import { SidebarModule } from 'primeng/sidebar';
 
 import { PrimeNGModule } from '../prime-ng.module';
 import { AppFooterComponent } from './app.footer.component';
@@ -23,15 +19,10 @@ import { AppTopBarComponent } from './app.topbar.component';
         AppLayoutComponent,
     ],
     imports: [
-        BrowserModule,
+        CommonModule,
         FormsModule,
-        HttpClientModule,
-        BrowserAnimationsModule,
-        InputTextModule,
-        SidebarModule,
         RouterModule,
         PrimeNGModule,
-
     ],
     exports: [AppLayoutComponent]
 })

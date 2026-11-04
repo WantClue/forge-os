@@ -30,8 +30,6 @@ import { DiffSuffixPipe } from './pipes/diff-suffix.pipe';
 import { SatsPipe } from './pipes/sats.pipe';
 import { ModalComponent } from './components/modal/modal.component';
 import { PrimeNGModule } from './prime-ng.module';
-import { MessageModule } from 'primeng/message';
-import { TooltipModule } from 'primeng/tooltip';
 
 const components = [
   AppComponent,
@@ -49,16 +47,14 @@ const components = [
   declarations: [
     ...components,
 
+    SwarmComponent,
+    ModalComponent,
     ANSIPipe,
     DateAgoPipe,
-    SwarmComponent,
-    SettingsComponent,
     HashSuffixPipe,
     DiffSuffixPipe,
     SatsPipe,
-    TruncateMiddlePipe,
-    PoolComponent,
-    ModalComponent
+    TruncateMiddlePipe
   ],
   imports: [
     BrowserModule,
@@ -72,9 +68,7 @@ const components = [
     BrowserAnimationsModule,
     CommonModule,
     PrimeNGModule,
-    AppLayoutModule,
-    MessageModule,
-    TooltipModule
+    AppLayoutModule
   ],
   providers: [
     providePrimeNG({

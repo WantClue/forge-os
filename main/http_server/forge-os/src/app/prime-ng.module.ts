@@ -7,11 +7,13 @@ import { FileUploadModule } from 'primeng/fileupload';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputTextModule } from 'primeng/inputtext';
+import { MessageModule } from 'primeng/message';
 import { TextareaModule } from 'primeng/textarea';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { SidebarModule } from 'primeng/sidebar';
 import { SliderModule } from 'primeng/slider';
 import { TabViewModule } from 'primeng/tabview';
+import { TooltipModule } from 'primeng/tooltip';
 
 const primeNgModules = [
     SidebarModule,
@@ -27,6 +29,8 @@ const primeNgModules = [
     InputGroupAddonModule,
     ProgressBarModule,
     TabViewModule,
+    MessageModule,
+    TooltipModule,
 ];
 
 @NgModule({

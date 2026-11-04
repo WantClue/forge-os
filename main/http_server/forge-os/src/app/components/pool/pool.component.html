@@ -84,7 +84,7 @@
                         <div class="field grid p-fluid" *ngIf="form.get('stratumTLS')?.value === 2">
                             <label htmlFor="stratumCert" class="col-12 mb-2 md:col-2 md:mb-0">TLS Certificate:</label>
                             <div class="col-12 md:col-10">
-                                <textarea pInputTextarea id="stratumCert" formControlName="stratumCert" rows="5"
+                                <textarea pTextarea id="stratumCert" formControlName="stratumCert" rows="5"
                                           style="width: 100%; font-family: monospace; font-size: 12px;"
                                           placeholder="Paste PEM certificate here"></textarea>
                             </div>
@@ -183,7 +183,7 @@
                         <div class="field grid p-fluid" *ngIf="form.get('fallbackStratumTLS')?.value === 2">
                             <label htmlFor="fallbackStratumCert" class="col-12 mb-2 md:col-2 md:mb-0">TLS Certificate:</label>
                             <div class="col-12 md:col-10">
-                                <textarea pInputTextarea id="fallbackStratumCert" formControlName="fallbackStratumCert" rows="5"
+                                <textarea pTextarea id="fallbackStratumCert" formControlName="fallbackStratumCert" rows="5"
                                           style="width: 100%; font-family: monospace; font-size: 12px;"
                                           placeholder="Paste PEM certificate here"></textarea>
                             </div>
