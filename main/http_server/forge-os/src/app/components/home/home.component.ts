@@ -6,6 +6,15 @@ import { QuicklinkService } from "src/app/services/quicklink.service"
 import { SystemService } from "src/app/services/system.service"
 import type { ICoinbase, ISystemInfo } from "src/models/ISystemInfo"
 
+// Forge glow: cool steel when idle, straw to orange while mining normally,
+// ember at the firmware's shutoff (75 °C for ASICs, 105 °C for the VR).
+const HEAT_STOPS: Array<[number, [number, number, number]]> = [
+  [0.53, [143, 166, 191]], // steel
+  [0.73, [242, 196, 109]], // straw
+  [0.87, [247, 137, 43]],  // forge orange
+  [1.0, [229, 72, 43]],    // ember
+]
+
 interface ICoinbaseCard {
   label: string
   coinbase: ICoinbase
@@ -46,12 +55,11 @@ export class HomeComponent {
   }
 
   private initializeChart() {
-    // Modern color scheme for dark theme
-    const textColor = '#f1f5f9'
-    const textColorSecondary = '#94a3b8'
-    const surfaceBorder = '#334155'
-    const primaryColor = '#6366f1'
-    const temperatureColor = '#ea580c'
+    const textColor = '#E6EDF5'
+    const textColorSecondary = '#8A9BB0'
+    const surfaceBorder = 'rgba(138, 155, 176, 0.12)'
+    const hashColor = '#8FA6BF'
+    const temperatureColor = '#F7892B'
 
     this.chartData = {
       labels: [],
@@ -60,12 +68,12 @@ export class HomeComponent {
           type: "line",
           label: "Hash Rate (TH/s)",
           data: [],
-          backgroundColor: 'rgba(99, 102, 241, 0.1)',
-          borderColor: primaryColor,
-          tension: 0.4,
-          pointRadius: 1,
-          pointHoverRadius: 6,
-          borderWidth: 3,
+          backgroundColor: 'rgba(143, 166, 191, 0.08)',
+          borderColor: hashColor,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 2,
           yAxisID: "y",
           fill: 'start',
         },
@@ -73,14 +81,14 @@ export class HomeComponent {
           type: "line",
           label: "Temperature (°C)",
           data: [],
-          backgroundColor: 'rgba(234, 88, 12, 0.1)',
+          backgroundColor: 'transparent',
           borderColor: temperatureColor,
-          tension: 0.4,
-          pointRadius: 1,
-          pointHoverRadius: 6,
-          borderWidth: 3,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 2,
           yAxisID: "y2",
-          fill: 'start',
+          fill: false,
         },
       ],
     }
@@ -97,20 +105,20 @@ export class HomeComponent {
           labels: {
             color: textColor,
             font: {
-              size: 14,
-              weight: 500
+              size: 12,
             },
             usePointStyle: true,
-            padding: 20
+            pointStyle: 'line',
+            padding: 16
           },
         },
         tooltip: {
-          backgroundColor: 'rgba(30, 41, 59, 0.95)',
+          backgroundColor: '#0B1219',
           titleColor: textColor,
           bodyColor: textColor,
-          borderColor: 'rgba(99, 102, 241, 0.3)',
+          borderColor: 'rgba(138, 155, 176, 0.3)',
           borderWidth: 1,
-          cornerRadius: 8,
+          cornerRadius: 4,
           displayColors: true,
           callbacks: {
             label: (tooltipItem: any) => {
@@ -268,6 +276,37 @@ export class HomeComponent {
     })
 
     return this.calculateAverage(efficiencies)
+  }
+
+  // Hottest component relative to its own shutoff, so the hero glows for
+  // whichever part is closest to tripping.
+  public hottestTemp(info: ISystemInfo): number {
+    const asic = Math.max(info.chiptemp1 || 0, info.chiptemp2 || 0, info.temp || 0)
+    const vrAsAsicScale = info.vrTemp > 0 ? (info.vrTemp / 105) * 75 : 0
+    return Math.max(asic, vrAsAsicScale)
+  }
+
+  public heatColor(temp: number, shutoff = 75): string {
+    const t = Math.max(0, temp) / shutoff
+    if (t <= HEAT_STOPS[0][0]) return this.rgb(HEAT_STOPS[0][1])
+    for (let i = 1; i < HEAT_STOPS.length; i++) {
+      const [pos, color] = HEAT_STOPS[i]
+      if (t <= pos) {
+        const [prevPos, prevColor] = HEAT_STOPS[i - 1]
+        const k = (t - prevPos) / (pos - prevPos)
+        return this.rgb(prevColor.map((c, j) => c + (color[j] - c) * k) as [number, number, number])
+      }
+    }
+    return this.rgb(HEAT_STOPS[HEAT_STOPS.length - 1][1])
+  }
+
+  public pct(value: number, max: number): number {
+    if (!max || !value) return 0
+    return Math.min(100, Math.max(0, (value / max) * 100))
+  }
+
+  private rgb([r, g, b]: [number, number, number]): string {
+    return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`
   }
 
   public isDualPool(info: ISystemInfo): boolean {

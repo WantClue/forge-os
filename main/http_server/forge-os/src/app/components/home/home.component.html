@@ -1,371 +1,236 @@
 <ng-template #loading>
-    <div class="flex align-items-center justify-content-center" style="min-height: 200px;">
-        <div class="text-center">
-            <i class="pi pi-spin pi-spinner text-4xl text-primary mb-3"></i>
-            <h4 class="text-500">Loading dashboard...</h4>
-        </div>
+    <div class="loading-state">
+        <i class="pi pi-spin pi-spinner"></i>
+        <p>Reading the miner…</p>
     </div>
 </ng-template>
 
 <ng-container *ngIf="info$ | async as info; else loading">
 
-    <!-- Enhanced alert messages with modern styling -->
-    <p-message *ngIf="info.overheat_mode" severity="error"
-        styleClass="alert-message"
-        text="⚠️ BitForge has overheated - Check settings immediately">
-    </p-message>
+    <!-- Alerts: say what happened and what to do -->
+    <div class="alerts" *ngIf="info.overheat_mode || !info.frequency || info.frequency < 400 || info.poolsUnavailable || info.power_fault">
+        <p-message *ngIf="info.overheat_mode" severity="error" styleClass="alert-message"
+            text="BitForge overheated and switched the ASIC off. It is now set to 50 MHz and 1000 mV with the fan at 100%. Set frequency and core voltage in Settings to start mining again.">
+        </p-message>
 
-    <p-message *ngIf="!info.frequency || info.frequency < 400" severity="warn"
-        styleClass="alert-message"
-        text="⚡ BitForge frequency is set low - Optimize in settings">
-    </p-message>
+        <p-message *ngIf="!info.frequency || info.frequency < 400" severity="warn" styleClass="alert-message"
+            text="Frequency is below 400 MHz, so hashrate is reduced. Raise it in Settings.">
+        </p-message>
 
-    <p-message *ngIf="info.poolsUnavailable" severity="error"
-        styleClass="alert-message"
-        text="⛏️ No pool reachable - mining is paused until a pool answers again">
-    </p-message>
+        <p-message *ngIf="info.poolsUnavailable" severity="error" styleClass="alert-message"
+            text="No pool is reachable. Mining is paused until a pool answers again.">
+        </p-message>
 
-    <p-message *ngIf="info.power_fault" severity="error"
-        styleClass="alert-message"
-        text="🔌 {{info.power_fault}} - Check your Power Supply">
-    </p-message>
+        <p-message *ngIf="info.power_fault" severity="error" styleClass="alert-message"
+            text="{{info.power_fault}}. Check the power supply.">
+        </p-message>
+    </div>
 
     <!-- Block found -->
     <div *ngIf="info.blocksFound > 0" class="block-found" [ngClass]="'block-' + info.lastBlockStatus">
         <i class="pi" [ngClass]="info.lastBlockStatus === 'orphaned' ? 'pi-exclamation-triangle' : 'pi-box'"></i>
-        <span>
+        <div class="block-found-text">
             <b [ngSwitch]="info.lastBlockStatus">
-                <ng-container *ngSwitchCase="'confirmed'">Your BitForge found a Bitcoin block!</ng-container>
+                <ng-container *ngSwitchCase="'confirmed'">Your BitForge found a Bitcoin block</ng-container>
                 <ng-container *ngSwitchCase="'orphaned'">Your BitForge found a block, but the chain moved on without it</ng-container>
-                <ng-container *ngSwitchDefault>Your BitForge found a block! Waiting for the network to build on it...</ng-container>
+                <ng-container *ngSwitchDefault>Your BitForge found a block. Waiting for the network to build on it.</ng-container>
             </b>
-            <div>
+            <div class="block-found-meta">
                 <span *ngIf="info.lastBlockTime">{{info.lastBlockTime * 1000 | date: 'medium'}}</span>
                 <a *ngIf="info.lastBlockHash" [href]="'https://mempool.space/block/' + info.lastBlockHash"
                     target="_blank" rel="noopener noreferrer" [title]="info.lastBlockHash">{{info.lastBlockHash | truncateMiddle}}</a>
                 <span *ngIf="info.blocksFound > 1">{{info.blocksFound}} blocks found in total</span>
             </div>
-        </span>
+        </div>
     </div>
 
-    <!-- Key Metrics Grid -->
-    <div class="metrics-grid">
-        <div class="metric-card hash-rate">
-            <div class="metric-header">
-                <span class="metric-label">Hash Rate</span>
-                <i class="pi pi-chart-line metric-icon"></i>
-            </div>
-            <div class="metric-content">
-                <div class="metric-value" *ngIf="!info.power_fault">
-                    {{info.hashRate * 1000000000 | hashSuffix}}
-                </div>
-                <div class="metric-value unavailable" *ngIf="info.power_fault">
-                    Unavailable
-                </div>
-                <ng-container *ngIf="!info.power_fault">
-                    <div class="metric-details">
-                        <span class="metric-change">↗ {{calculateAverage(hashrateData) | hashSuffix}}</span>
-                        <span class="metric-period">avg last 5 mins</span>
-                    </div>
+    <!-- Forge: the hashrate, lit by the hottest chip -->
+    <section class="forge" [style.--heat]="heatColor(hottestTemp(info))">
+        <div class="forge-main">
+            <h2 class="forge-label">Hashrate</h2>
+            <ng-container *ngIf="!info.power_fault; else hashUnavailable">
+                <div class="forge-value">{{info.hashRate * 1000000000 | hashSuffix}}</div>
+                <p class="forge-sub">
+                    5 minute average <span class="num">{{calculateAverage(hashrateData) | hashSuffix}}</span>
+                </p>
+            </ng-container>
+            <ng-template #hashUnavailable>
+                <div class="forge-value is-unavailable">Unavailable</div>
+                <p class="forge-sub">Hashrate returns once the power fault is cleared.</p>
+            </ng-template>
+
+            <ul class="heat-strip" aria-label="Temperatures">
+                <li *ngIf="info.chiptemp1 && info.chiptemp1 > 0" [style.--heat]="heatColor(info.chiptemp1)">
+                    <span class="heat-dot"></span>ASIC 1 <span class="num">{{info.chiptemp1}} °C</span>
+                </li>
+                <li *ngIf="info.chiptemp2 && info.chiptemp2 > 0" [style.--heat]="heatColor(info.chiptemp2)">
+                    <span class="heat-dot"></span>ASIC 2 <span class="num">{{info.chiptemp2}} °C</span>
+                </li>
+                <li *ngIf="info.vrTemp > 0" [style.--heat]="heatColor(info.vrTemp, 105)">
+                    <span class="heat-dot"></span>Regulator <span class="num">{{info.vrTemp}} °C</span>
+                </li>
+            </ul>
+        </div>
+
+        <dl class="readouts">
+            <div class="readout">
+                <dt>Efficiency</dt>
+                <ng-container *ngIf="!info.power_fault; else readoutUnavailable">
+                    <dd class="readout-value">{{info.power / (info.hashRate/1000) | number: '1.2-2'}} <small>J/TH</small></dd>
+                    <dd class="readout-note">30 minute average {{calculateEfficiencyAverage(hashrateData, powerData) | number: '1.2-2'}} J/TH</dd>
                 </ng-container>
             </div>
-        </div>
 
-        <div class="metric-card efficiency">
-            <div class="metric-header">
-                <span class="metric-label">Efficiency</span>
-                <i class="pi pi-bolt metric-icon"></i>
-            </div>
-            <div class="metric-content">
-                <div class="metric-value" *ngIf="!info.power_fault">
-                    {{info.power / (info.hashRate/1000) | number: '1.2-2'}} J/TH
-                </div>
-                <div class="metric-value unavailable" *ngIf="info.power_fault">
-                    Unavailable
-                </div>
-                <ng-container *ngIf="!info.power_fault">
-                    <div class="metric-details">
-                        <span class="metric-change">↗ {{calculateEfficiencyAverage(hashrateData, powerData) | number: '1.2-2'}} J/TH</span>
-                        <span class="metric-period">avg last 30 min</span>
-                    </div>
+            <div class="readout">
+                <dt>Accepted shares</dt>
+                <dd class="readout-value">{{info.sharesAccepted | number: '1.0-0'}}</dd>
+                <dd class="readout-note" *ngIf="isDualPool(info)">
+                    Primary {{getPoolSharesAccepted(info, 0) | number: '1.0-0'}}, secondary {{getPoolSharesAccepted(info, 1) | number: '1.0-0'}}
+                </dd>
+                <dd class="readout-note is-ok" *ngIf="info.sharesRejected === 0">None rejected</dd>
+                <ng-container *ngIf="info.sharesRejected > 0">
+                    <dd class="readout-note is-bad" *ngFor="let reason of info.sharesRejectedReasons">
+                        {{reason.count | number: '1.0-0'}} rejected: {{reason.message}}
+                        ({{(reason.count / (info.sharesAccepted + info.sharesRejected) * 100) | number: '1.2-2'}}%)
+                    </dd>
                 </ng-container>
             </div>
-        </div>
 
-        <div class="metric-card shares">
-            <div class="metric-header">
-                <span class="metric-label">Shares</span>
-                <i class="pi pi-share-alt metric-icon"></i>
+            <div class="readout">
+                <dt>Best difficulty</dt>
+                <dd class="readout-value">{{info.bestDiff | diffSuffix}}</dd>
+                <dd class="readout-note">{{info.bestSessionDiff}} since the last restart</dd>
             </div>
-            <div class="metric-content">
-                <div class="metric-value">{{info.sharesAccepted | number: '1.0-0'}}</div>
-                <div class="metric-details">
-                    <ng-container *ngIf="isDualPool(info)">
-                        <span class="metric-status success">Primary {{getPoolSharesAccepted(info, 0) | number: '1.0-0'}}</span>
-                        <span class="metric-status success">Secondary {{getPoolSharesAccepted(info, 1) | number: '1.0-0'}}</span>
-                    </ng-container>
-                    <span *ngIf="info.sharesRejected === 0" class="metric-status success">0 rejected</span>
-                    <div *ngIf="info.sharesRejected > 0">
-                        <div *ngFor="let sharesRejectedReason of info.sharesRejectedReasons" class="metric-status error">
-                            {{sharesRejectedReason.count | number: '1.0-0'}} {{sharesRejectedReason.message}}
-                            ({{(sharesRejectedReason.count / (info.sharesAccepted + info.sharesRejected) * 100) | number: '1.2-2'}}%)
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <div class="metric-card difficulty">
-            <div class="metric-header">
-                <span class="metric-label">Best Difficulty</span>
-                <i class="pi pi-target metric-icon"></i>
-            </div>
-            <div class="metric-content">
-                <div class="metric-value">{{info.bestDiff | diffSuffix}}</div>
-                <div class="metric-details">
-                    <span class="metric-period">all-time best</span>
-                    <span class="metric-change">{{info.bestSessionDiff}} since boot</span>
-                </div>
-            </div>
+            <ng-template #readoutUnavailable>
+                <dd class="readout-value is-unavailable">Unavailable</dd>
+            </ng-template>
+        </dl>
+    </section>
+
+    <!-- Chart -->
+    <section class="panel chart-panel" *ngIf="!info.power_fault">
+        <h3 class="panel-title">Last hour</h3>
+        <div class="chart-content">
+            <p-chart [data]="chartData" [options]="chartOptions"></p-chart>
         </div>
+    </section>
+
+    <div class="panel-row">
+        <!-- Power -->
+        <section class="panel">
+            <h3 class="panel-title">Power</h3>
+
+            <div class="gauge-row">
+                <div class="gauge-head"><span>Consumption</span><span class="num">{{info.power}} W</span></div>
+                <div class="gauge"><span [style.width.%]="pct(info.power, info.maxPower)"></span></div>
+            </div>
+
+            <div class="gauge-row">
+                <div class="gauge-head"><span>Input voltage</span><span class="num">{{info.voltage}} V</span></div>
+                <div class="gauge">
+                    <span [style.width.%]="pct(info.voltage, info.nominalVoltage + .5)"></span>
+                    <i class="gauge-mark" [style.left.%]="pct(info.nominalVoltage, info.nominalVoltage + .5)"
+                        [title]="'Nominal ' + info.nominalVoltage + ' V'"></i>
+                </div>
+                <p class="gauge-warning" *ngIf="info.voltage < (info.nominalVoltage + .5) * 0.87">
+                    Input voltage is low. Check the power supply and cable.
+                </p>
+            </div>
+
+            <div class="gauge-row">
+                <div class="gauge-head"><span>ASIC frequency</span><span class="num">{{info.frequency}} MHz</span></div>
+                <div class="gauge"><span [style.width.%]="pct(info.frequency, maxFrequency)"></span></div>
+            </div>
+
+            <div class="gauge-row">
+                <div class="gauge-head"><span>Measured core voltage</span><span class="num">{{info.coreVoltageActual}} V</span></div>
+                <div class="gauge"><span [style.width.%]="pct(info.coreVoltageActual, 1.8)"></span></div>
+            </div>
+        </section>
+
+        <!-- Heat -->
+        <section class="panel">
+            <h3 class="panel-title">Heat</h3>
+
+            <div class="gauge-row is-heat-row" [style.--heat]="heatColor(info.chiptemp1 || 0)">
+                <div class="gauge-head">
+                    <span>ASIC 1</span>
+                    <span class="num">{{info.chiptemp1 && info.chiptemp1 > 0 ? info.chiptemp1 + ' °C' : 'No reading'}}</span>
+                </div>
+                <div class="gauge is-heat"><span [style.width.%]="pct(info.chiptemp1 || 0, maxTemp)"></span></div>
+                <p class="gauge-warning" *ngIf="info.chiptemp1 && info.chiptemp1 >= 70">
+                    ASIC 1 is close to the 75 °C shutoff. Lower frequency or improve cooling.
+                </p>
+            </div>
+
+            <div class="gauge-row is-heat-row" [style.--heat]="heatColor(info.chiptemp2 || 0)">
+                <div class="gauge-head">
+                    <span>ASIC 2</span>
+                    <span class="num">{{info.chiptemp2 && info.chiptemp2 > 0 ? info.chiptemp2 + ' °C' : 'No reading'}}</span>
+                </div>
+                <div class="gauge is-heat"><span [style.width.%]="pct(info.chiptemp2 || 0, maxTemp)"></span></div>
+                <p class="gauge-warning" *ngIf="info.chiptemp2 && info.chiptemp2 >= 70">
+                    ASIC 2 is close to the 75 °C shutoff. Lower frequency or improve cooling.
+                </p>
+            </div>
+
+            <div class="gauge-row is-heat-row" *ngIf="info.vrTemp > 0" [style.--heat]="heatColor(info.vrTemp, 105)">
+                <div class="gauge-head"><span>Voltage regulator</span><span class="num">{{info.vrTemp}} °C</span></div>
+                <div class="gauge is-heat"><span [style.width.%]="pct(info.vrTemp, 120)"></span></div>
+                <p class="gauge-warning" *ngIf="info.vrTemp >= 100">
+                    The regulator is close to its 105 °C shutoff. Lower core voltage or frequency.
+                </p>
+            </div>
+
+            <div class="gauge-row">
+                <div class="gauge-head"><span>Fan</span><span class="num">{{info.fanSpeed}}%, {{info.fanrpm}} RPM</span></div>
+                <div class="gauge"><span [style.width.%]="pct(info.fanSpeed, 100)"></span></div>
+            </div>
+        </section>
     </div>
 
+    <div class="panel-row">
+        <!-- Pool and uptime -->
+        <section class="panel">
+            <h3 class="panel-title">
+                {{info.isUsingFallbackStratum ? 'Fallback pool' : 'Pool'}}
+                <span class="tag is-warn" *ngIf="info.isUsingFallbackStratum">Primary unreachable</span>
+            </h3>
+            <dl class="facts">
+                <ng-container *ngIf="!info.isUsingFallbackStratum">
+                    <div><dt>Address</dt><dd><a [href]="(quickLink$ | async)" target="_blank" rel="noopener noreferrer">{{info.stratumURL}}:{{info.stratumPort}}</a></dd></div>
+                    <div><dt>Worker</dt><dd class="code" [title]="info.stratumUser">{{info.stratumUser | truncateMiddle:10:8}}</dd></div>
+                </ng-container>
+                <ng-container *ngIf="info.isUsingFallbackStratum">
+                    <div><dt>Address</dt><dd><a [href]="(fallbackQuickLink$ | async) || info.fallbackStratumURL" target="_blank" rel="noopener noreferrer">{{info.fallbackStratumURL}}:{{info.fallbackStratumPort}}</a></dd></div>
+                    <div><dt>Worker</dt><dd class="code" [title]="info.fallbackStratumUser">{{info.fallbackStratumUser | truncateMiddle:10:8}}</dd></div>
+                </ng-container>
+                <div><dt>Protocol</dt><dd>{{(info.isUsingFallbackStratum ? info.fallbackStratumProtocol : info.stratumProtocol) === 1 ? 'Stratum V2' : 'Stratum V1'}}</dd></div>
+                <div><dt>Share difficulty</dt><dd class="num">{{info.stratumDiff > 0 ? info.stratumDiff : 'Not set yet'}}</dd></div>
+                <div><dt>Running for</dt><dd>{{info.uptimeSeconds | dateAgo}}</dd></div>
+            </dl>
+        </section>
 
-    <!-- Performance Chart -->
-    <div class="chart-section" *ngIf="!info.power_fault">
-        <div class="chart-card">
-            <div class="chart-header">
-                <i class="pi pi-chart-line chart-icon"></i>
-                <span class="chart-title">Performance Overview</span>
-            </div>
-            <div class="chart-content">
-                <p-chart [data]="chartData" [options]="chartOptions"></p-chart>
-            </div>
-        </div>
-    </div>
-
-    <!-- System Status Grid -->
-    <div class="status-grid">
-        <!-- Power Management -->
-        <div class="status-card power-card">
-            <div class="status-header">
-                <i class="pi pi-bolt status-icon"></i>
-                <span class="status-title">Power Management</span>
-            </div>
-            <div class="status-content">
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>Power Consumption</span>
-                        <span class="status-value">{{info.power}}W</span>
-                    </div>
-                    <p-progressBar [value]="(info.power / info.maxPower) * 100" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                </div>
-
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>Input Voltage</span>
-                        <span class="status-value">{{info.voltage}}V</span>
-                    </div>
-                    <div class="progress-container">
-                        <p-progressBar [value]="(info.voltage / (info.nominalVoltage + .5)) * 100" styleClass="custom-progress">
-                            <ng-template pTemplate="content" let-value></ng-template>
-                        </p-progressBar>
-                        <div class="voltage-marker" [style.left]="(info.nominalVoltage / (info.nominalVoltage + .5)) * 100 + '%'">
-                            <span class="marker-label">{{info.nominalVoltage}}V</span>
-                        </div>
-                    </div>
-                    <div class="status-warning" *ngIf="info.voltage < (info.nominalVoltage + .5) * 0.87">
-                        ⚠️ Low voltage detected
-                    </div>
-                </div>
-
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>ASIC Frequency</span>
-                        <span class="status-value">{{info.frequency}} MHz</span>
-                    </div>
-                    <p-progressBar [value]="(info.frequency / maxFrequency) * 100" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                </div>
-
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>Measured ASIC Voltage</span>
-                        <span class="status-value">{{info.coreVoltageActual}}V</span>
-                    </div>
-                    <p-progressBar [value]="(info.coreVoltageActual / 1.8) * 100" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                </div>
-            </div>
-        </div>
-
-        <!-- Temperature Monitoring -->
-        <div class="status-card temperature-card">
-            <div class="status-header">
-                <i class="pi pi-sun status-icon"></i>
-                <span class="status-title">Temperature Monitoring</span>
-            </div>
-            <div class="status-content">
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>ASIC 1 Chip Temperature</span>
-                        <span class="status-value">
-                            <ng-container *ngIf="info.chiptemp1 && info.chiptemp1 > 0; else noTemp1">
-                                {{info.chiptemp1}}°C
-                            </ng-container>
-                            <ng-template #noTemp1>--</ng-template>
-                        </span>
-                    </div>
-                    <p-progressBar [value]="((info.chiptemp1 || 0) / maxTemp) * 100" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                    <div class="status-warning" *ngIf="info.chiptemp1 && info.chiptemp1 >= 70">
-                        🔥 High temperature warning
-                    </div>
-                </div>
-
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>ASIC 2 Chip Temperature</span>
-                        <span class="status-value">
-                            <ng-container *ngIf="info.chiptemp2 && info.chiptemp2 > 0; else noTemp2">
-                                {{info.chiptemp2}}°C
-                            </ng-container>
-                            <ng-template #noTemp2>--</ng-template>
-                        </span>
-                    </div>
-                    <p-progressBar [value]="((info.chiptemp2 || 0) / maxTemp) * 100" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                    <div class="status-warning" *ngIf="info.chiptemp2 && info.chiptemp2 >= 70">
-                        🔥 High temperature warning
-                    </div>
-                </div>
-
-                <div class="status-item" *ngIf="info.vrTemp > 0">
-                    <div class="status-item-header">
-                        <span>Voltage Regulator Temp</span>
-                        <span class="status-value">{{info.vrTemp}}°C</span>
-                    </div>
-                    <p-progressBar [value]="(info.vrTemp / 120) * 100" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                    <div class="status-warning" *ngIf="info.vrTemp >= 105">
-                        🔥 Critical VR temperature
-                    </div>
-                </div>
-
-                <div class="status-item">
-                    <div class="status-item-header">
-                        <span>Fan Speed</span>
-                        <span class="status-value">{{info.fanSpeed}}% ({{info.fanrpm}} RPM)</span>
-                    </div>
-                    <p-progressBar [value]="info.fanSpeed" styleClass="custom-progress">
-                        <ng-template pTemplate="content" let-value></ng-template>
-                    </p-progressBar>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Coinbase Transaction -->
-    <div class="coinbase-grid" *ngIf="coinbaseCards$ | async as coinbaseCards">
-        <div class="info-card coinbase-card" *ngFor="let card of coinbaseCards; trackBy: trackCoinbaseCard">
-            <div class="info-header">
-                <i class="pi pi-bitcoin info-icon"></i>
-                <span class="info-title">Coinbase</span>
-                <span class="status-badge connected" *ngIf="card.label">{{card.label}}</span>
-            </div>
-            <div class="info-content">
-                <div class="info-item">
-                    <span class="info-label">Block Height</span>
-                    <span class="info-value">{{card.coinbase.blockHeight}}</span>
-                </div>
-                <div class="info-item" *ngIf="card.coinbase.scriptsig">
-                    <span class="info-label">Scriptsig</span>
-                    <span class="info-value coinbase-mono">{{card.coinbase.scriptsig}}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Total Value</span>
-                    <span class="info-value">{{card.coinbase.valueTotalSatoshis | sats}}</span>
-                </div>
-                <div class="coinbase-outputs" *ngIf="card.coinbase.outputs?.length">
-                    <span class="info-label">Outputs</span>
-                    <div class="coinbase-output" *ngFor="let output of card.coinbase.outputs">
-                        <span class="coinbase-mono" [title]="output.address">{{output.address | truncateMiddle:14:12}}</span>
-                        <span class="coinbase-value" *ngIf="output.value > 0">{{output.value | sats}}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pool Information & Uptime -->
-    <div class="info-grid">
-        <div class="info-card pool-card">
-            <div class="info-header">
-                <i class="pi pi-wifi info-icon"></i>
-                <span class="info-title">Pool Information</span>
-            </div>
-            <div class="info-content">
-                <div class="pool-info">
-                    <ng-container *ngIf="!info.isUsingFallbackStratum">
-                        <div class="info-item">
-                            <span class="info-label">URL</span>
-                            <a [href]="(quickLink$ | async)" target="_blank" class="info-link">{{info.stratumURL}}</a>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Port</span>
-                            <span class="info-value">{{info.stratumPort}}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">User</span>
-                            <span class="info-value">{{info.stratumUser | truncateMiddle:10:8}}</span>
-                        </div>
-                    </ng-container>
-                    <ng-container *ngIf="info.isUsingFallbackStratum">
-                        <div class="info-item">
-                            <span class="info-label">URL</span>
-                            <a [href]="(fallbackQuickLink$ | async) || info.fallbackStratumURL" target="_blank" class="info-link">
-                                {{info.fallbackStratumURL}}
-                            </a>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Port</span>
-                            <span class="info-value">{{info.fallbackStratumPort}}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">User</span>
-                            <span class="info-value">{{info.fallbackStratumUser | truncateMiddle:10:8}}</span>
-                        </div>
-                    </ng-container>
-                    <div class="info-item">
-                        <span class="info-label">Protocol</span>
-                        <span class="info-value">{{(info.isUsingFallbackStratum ? info.fallbackStratumProtocol : info.stratumProtocol) === 1 ? 'Stratum V2' : 'Stratum V1'}}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Difficulty</span>
-                        <span class="info-value">{{info.stratumDiff > 0 ? info.stratumDiff : '—'}}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="info-card uptime-card">
-            <div class="info-header">
-                <i class="pi pi-chart-line info-icon"></i>
-                <span class="info-title">System Uptime</span>
-            </div>
-            <div class="info-content">
-                <div class="uptime-display">
-                    <div class="uptime-value">{{info.uptimeSeconds | dateAgo}}</div>
-                    <div class="uptime-label">Current session uptime</div>
-                </div>
-            </div>
-        </div>
+        <!-- Coinbase -->
+        <ng-container *ngIf="coinbaseCards$ | async as coinbaseCards">
+            <section class="panel" *ngFor="let card of coinbaseCards; trackBy: trackCoinbaseCard">
+                <h3 class="panel-title">
+                    Block template
+                    <span class="tag" *ngIf="card.label">{{card.label}}</span>
+                </h3>
+                <dl class="facts">
+                    <div><dt>Height</dt><dd class="num">{{card.coinbase.blockHeight | number: '1.0-0'}}</dd></div>
+                    <div><dt>Reward with fees</dt><dd class="num">{{card.coinbase.valueTotalSatoshis | sats}}</dd></div>
+                    <div *ngIf="card.coinbase.scriptsig" class="is-stacked"><dt>Coinbase message</dt><dd class="code">{{card.coinbase.scriptsig}}</dd></div>
+                </dl>
+                <ul class="payouts" *ngIf="card.coinbase.outputs?.length" aria-label="Payout outputs">
+                    <li *ngFor="let output of card.coinbase.outputs">
+                        <span class="code" [title]="output.address">{{output.address | truncateMiddle:14:12}}</span>
+                        <span class="num" *ngIf="output.value > 0">{{output.value | sats}}</span>
+                    </li>
+                </ul>
+            </section>
+        </ng-container>
     </div>
 </ng-container>
