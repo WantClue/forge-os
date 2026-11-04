@@ -1,39 +1,87 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ForgeOS recovery</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+/* ForgeOS palette, self-contained: this page must work when the web UI is broken. */
+:root {
+    --quench: #070d17; --anvil: #0b1219; --scale: rgba(138, 155, 176, 0.18);
+    --steel: #8fa6bf; --text: #e6edf5; --ash: #8a9bb0; --ash-dim: #64768b;
+    --ok: #6fcf97; --warn: #f2c46d; --bad: #f2785c;
+    color-scheme: dark;
+}
+* { box-sizing: border-box; }
 body {
-    background-color: #000;
-    color: #00ff00;
-    font-family: courier new;
+    margin: 0; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    background: var(--quench);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+main {
+    width: 100%; max-width: 480px;
+    padding: 28px 24px;
+    border: 1px solid var(--scale);
+    border-radius: 6px;
+    background: var(--anvil);
+}
+h1 { margin: 0 0 4px; font-size: 21px; font-weight: 400; }
+p { margin: 0 0 12px; color: var(--ash); }
+.warning { color: var(--warn); }
+.step { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--scale); }
+label { display: block; margin-bottom: 8px; color: var(--ash); font-size: 13px; }
+input[type=file] { width: 100%; color: var(--text); font: inherit; }
+input[type=file]::file-selector-button {
+    margin-right: 12px; padding: 8px 14px;
+    border: 1px solid rgba(138, 155, 176, 0.3); border-radius: 4px;
+    background: transparent; color: var(--text); font: inherit; cursor: pointer;
+}
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+button {
+    padding: 9px 16px;
+    border-radius: 4px;
+    font: inherit; cursor: pointer;
+}
+#upload { border: 1px solid var(--steel); background: var(--steel); color: var(--quench); }
+#upload:hover { background: #adbfd0; }
+#restart { border: 1px solid rgba(138, 155, 176, 0.3); background: transparent; color: var(--text); }
+#restart:hover { border-color: var(--steel); }
+button:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+#status { color: var(--ash); font-size: 13px; }
+#response {
+    display: block; margin-top: 8px; min-height: 1.5em;
+    color: var(--ash-dim); font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-all;
 }
 </style>
-<head>
-<title>AxeOS Recovery</title>
 </head>
 <body>
-<pre>
-                      ____   _____
-     /\              / __ \ / ____|
-    /  \   __  _____| |  | | (___
-   / /\ \  \ \/ / _ \ |  | |\___ \
-  / ____ \  >  <  __/ |__| |____) |
- /_/___ \_\/_/\_\___|\____/|_____/
- |  __ \
- | |__) |___  ___ _____   _____ _ __ _   _
- |  _  // _ \/ __/ _ \ \ / / _ \ '__| | | |
- | | \ \  __/ (_| (_) \ V /  __/ |  | |_| |
- |_|  \_\___|\___\___/ \_/ \___|_|   \__, |
-                                      __/ |
-                                     |___/
-</pre>
-<p>Please upload www.bin to recover AxeOS</p>
-<p>After clicking upload, please wait 60 seconds<br>
-DO NOT restart the device until response is received</p>
-<input type="file" id="wwwfile" name="wwwfile"><br>
-<button id="upload">Upload</button>
-<small id="status"></small>
-<br><button id="restart">Restart</button>
-<br><br>Response:<br>
-<small id="response"></small>
+<main>
+<h1>ForgeOS recovery</h1>
+<p>The web interface is missing or damaged. Upload <strong>www.bin</strong> to restore it.</p>
+<p class="warning">The upload takes about 60 seconds. Keep the miner powered on and do not restart it until a response appears below.</p>
+
+<div class="step">
+    <label for="wwwfile">Web interface file (www.bin)</label>
+    <input type="file" id="wwwfile" name="wwwfile" accept=".bin">
+    <div class="actions">
+        <button id="upload" type="button">Upload</button>
+        <small id="status" role="status"></small>
+    </div>
+</div>
+
+<div class="step">
+    <label>When the upload has finished</label>
+    <div class="actions">
+        <button id="restart" type="button">Restart</button>
+    </div>
+    <small id="response" aria-live="polite"></small>
+</div>
+</main>
 <script>
 document.getElementById('upload').addEventListener('click', handleUpload);
 statusMsg = document.getElementById('status');
@@ -48,13 +96,13 @@ function handleUpload() {
   upload_xhr.onload = function() {
       const responseBody = upload_xhr.responseText;
       if (upload_xhr.status === 200) {
-          statusMsg.innerHTML = 'Upload successful!';
+          statusMsg.innerHTML = 'Uploaded. Restart the miner to load the web interface.';
       } else {
-          statusMsg.innerHTML='Error uploading!';
+          statusMsg.innerHTML = 'Upload failed. Check that you chose www.bin and try again.';
       }
       responseMsg.innerHTML = responseBody;
   };
-  statusMsg.innerHTML = 'uploading...';
+  statusMsg.innerHTML = 'Uploading…';
   upload_xhr.send(file);
 }
 document.getElementById('restart').addEventListener('click', handleRestart);

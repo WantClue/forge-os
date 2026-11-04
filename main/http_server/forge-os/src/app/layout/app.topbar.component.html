@@ -1,23 +1,21 @@
-<div class="layout-topbar">
-    <!-- Dashboard Header -->
-    <div class="dashboard-header">
-        <div class="header-content">
-            <h1 class="dashboard-title">ForgeOS Dashboard</h1>
-            <p class="dashboard-subtitle">Monitor your mining operations in real-time</p>
-        </div>
-        <div class="header-status" *ngIf="info$ | async as info">
-            <div class="status-badge" [ngClass]="getPerformanceMode(info).class">
-                <div class="status-dot"></div>
-                {{ getPerformanceMode(info).label }}
-            </div>
-            <button class="restart-btn-header" (click)="restart()">
-                <i class="pi pi-refresh"></i>
-                Restart
-            </button>
-        </div>
-    </div>
-
-    <button *ngIf="!isAPMode" #menubutton class="p-link layout-menu-button layout-topbar-button" (click)="layoutService.onMenuToggle()">
+<header class="layout-topbar">
+    <button *ngIf="!isAPMode" #menubutton type="button" class="layout-menu-button"
+        aria-label="Open menu" (click)="layoutService.onMenuToggle()">
         <i class="pi pi-bars"></i>
     </button>
-</div>
+
+    <h1 class="topbar-title">{{ title$ | async }}</h1>
+
+    <div class="topbar-status" *ngIf="!isAPMode && (info$ | async) as info">
+        <span class="topbar-heat" [style.--heat]="heat(info)" [title]="'Hottest part, relative to its shutoff temperature'">
+            <span class="heat-dot"></span>
+            <span class="num">{{ hottestChip(info) }} °C</span>
+        </span>
+        <span class="topbar-hashrate num" *ngIf="!info.power_fault">{{ hashrate(info) }}</span>
+        <span class="tag" [ngClass]="getPerformanceMode(info).class">{{ getPerformanceMode(info).label }}</span>
+        <button type="button" class="topbar-restart" (click)="restart()">
+            <i class="pi pi-refresh"></i>
+            <span>Restart</span>
+        </button>
+    </div>
+</header>

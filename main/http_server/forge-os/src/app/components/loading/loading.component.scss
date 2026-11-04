@@ -1,11 +1,12 @@
 #loading {
-    background-color: var(--maskbg);
+    background-color: rgba(7, 13, 23, 0.72);
+    color: var(--steel);
     left: 0;
     right: 0;
     bottom: 0;
     top: 0;
     position: fixed;
-    z-index: 99999999999999999999;
+    z-index: 100000;
 }
 
 figure {
@@ -39,4 +40,8 @@ figure {
     to {
         transform: rotate(360deg);
     }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .icon-fan { animation-duration: 4s; }
 }

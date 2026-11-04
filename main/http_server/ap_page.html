@@ -1,183 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>BitForge AP Status</title>
+    <meta charset="utf-8">
+    <title>BitForge network status</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* ForgeOS palette, self-contained: this page is served from firmware. */
+        :root {
+            --quench: #070d17; --anvil: #0b1219; --scale: rgba(138, 155, 176, 0.18);
+            --steel: #8fa6bf; --text: #e6edf5; --ash: #8a9bb0; --ash-dim: #64768b;
+            --ok: #6fcf97; --warn: #f2c46d;
+            color-scheme: dark;
         }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #ffffff;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px;
+            background: var(--quench);
+            color: var(--text);
+            font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            font-variant-numeric: tabular-nums;
         }
-        .container { 
-            max-width: 500px;
-            width: 100%;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 40px 30px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        .container {
+            width: 100%; max-width: 440px;
+            padding: 28px 24px;
+            border: 1px solid var(--scale);
+            border-radius: 6px;
+            background: var(--anvil);
         }
-        h1 {
-            font-size: 1.8em;
-            margin-bottom: 10px;
-            text-align: center;
-            color: #ffffff;
-        }
-        .subtitle {
-            text-align: center;
-            color: #a0a0a0;
-            font-size: 0.9em;
-            margin-bottom: 30px;
-        }
-        .status-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-        }
-        .status-label {
-            font-size: 0.85em;
-            color: #a0a0a0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-        }
-        .status-value {
-            font-size: 1.1em;
-            margin-bottom: 5px;
-        }
-        .ip-display { 
-            font-size: 2em;
-            font-weight: bold;
-            color: #4CAF50;
-            font-family: 'Courier New', monospace;
+        h1 { font-size: 21px; font-weight: 400; margin-bottom: 4px; }
+        .subtitle { color: var(--ash); font-size: 13px; margin-bottom: 24px; }
+        .row { padding: 14px 0; border-top: 1px solid var(--scale); }
+        .status-label { color: var(--ash); font-size: 13px; margin-bottom: 4px; }
+        .status-value { font-size: 16px; display: flex; align-items: center; gap: 8px; }
+        .status-icon { width: 8px; height: 8px; border-radius: 50%; background: var(--ash-dim); flex-shrink: 0; }
+        .status-connected { color: var(--ok); }
+        .status-connected .status-icon { background: var(--ok); }
+        .status-disconnected { color: var(--warn); }
+        .status-disconnected .status-icon { background: var(--warn); }
+        .loading { color: var(--ash); }
+        .ip-display {
+            font-size: 32px; line-height: 1.2; letter-spacing: -0.01em;
             word-break: break-all;
         }
-        .status-connected {
-            color: #4CAF50;
-        }
-        .status-disconnected {
-            color: #ff9800;
-        }
-        .status-icon {
-            display: inline-block;
-            margin-right: 8px;
-        }
-        .loading {
-            text-align: center;
-            color: #a0a0a0;
-        }
-        .info-text {
-            text-align: center;
-            color: #a0a0a0;
-            font-size: 0.85em;
-            margin-top: 20px;
-            line-height: 1.6;
-        }
-        .refresh-indicator {
-            text-align: center;
-            color: #666;
-            font-size: 0.75em;
-            margin-top: 15px;
-        }
+        .ip-display.is-ok { color: var(--ok); }
+        .ip-display.is-warn { color: var(--warn); font-size: 18px; }
+        .info-text { color: var(--ash); font-size: 13px; margin-top: 8px; }
         .link-button {
             display: block;
-            text-align: center;
-            margin-top: 20px;
-            padding: 12px 20px;
-            background: rgba(76, 175, 80, 0.1);
-            border: 1px solid rgba(76, 175, 80, 0.3);
-            border-radius: 10px;
-            color: #4CAF50;
-            text-decoration: none;
-            transition: all 0.3s ease;
+            margin-top: 20px; padding: 11px 16px;
+            border-radius: 4px;
+            background: var(--steel);
+            color: var(--quench);
+            text-align: center; text-decoration: none;
         }
-        .link-button:hover {
-            background: rgba(76, 175, 80, 0.2);
-            border-color: rgba(76, 175, 80, 0.5);
-        }
+        .link-button:hover { background: #adbfd0; }
+        .link-button:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+        .refresh-indicator { color: var(--ash-dim); font-size: 12px; margin-top: 16px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>BitForge Network</h1>
-        <div class="subtitle">Access Point Status</div>
+    <main class="container">
+        <h1>BitForge network</h1>
+        <p class="subtitle">You are connected to the miner's own access point.</p>
 
-        <div class="status-card">
-            <div class="status-label">WiFi Connection Status</div>
+        <div class="row">
+            <div class="status-label">Home Wi-Fi</div>
             <div id="status" class="status-value loading">
-                <span class="status-icon"></span> Loading...
+                <span class="status-icon"></span> Checking…
             </div>
         </div>
 
-        <div class="status-card">
-            <div class="status-label">Station IP Address</div>
+        <div class="row">
+            <div class="status-label">Address on your home network</div>
             <div class="ip-display" id="ip">---</div>
+            <p class="info-text">
+                Once your phone or computer is back on your home Wi-Fi, open this address to reach the miner.
+            </p>
         </div>
 
-        <div class="info-text">
-            This is the IP address of your BitForge device on your home WiFi network. 
-            Use this address to access the device when connected to the same network.
-        </div>
+        <a href="/" class="link-button" id="mainLink" style="display: none;">Open ForgeOS</a>
 
-        <a href="/" class="link-button" id="mainLink" style="display: none;">
-            Open Full Interface
-        </a>
-
-        <div class="refresh-indicator">Auto-refreshing every 5 seconds</div>
-    </div>
+        <p class="refresh-indicator">Updates every 5 seconds.</p>
+    </main>
 
     <script>
         async function updateStatus() {
             try {
                 const response = await fetch('/api/ap/info');
                 const data = await response.json();
-                
+
                 const statusDiv = document.getElementById('status');
                 const ipDiv = document.getElementById('ip');
                 const mainLink = document.getElementById('mainLink');
-                
+
                 if (data.staConnected) {
-                    statusDiv.innerHTML = '<span class="status-icon"></span> Connected to WiFi';
+                    statusDiv.innerHTML = '<span class="status-icon"></span> Connected';
                     statusDiv.className = 'status-value status-connected';
-                    ipDiv.innerHTML = data.staIp || 'No IP';
-                    ipDiv.style.color = '#4CAF50';
-                    
+                    ipDiv.textContent = data.staIp || 'No address yet';
+                    ipDiv.className = 'ip-display is-ok';
+
                     // Show link to main interface if we have an IP
                     if (data.staIp && data.staIp !== '') {
                         mainLink.style.display = 'block';
                         mainLink.href = 'http://' + data.staIp;
                     }
                 } else {
-                    statusDiv.innerHTML = '<span class="status-icon"></span> Not Connected to WiFi';
+                    statusDiv.innerHTML = '<span class="status-icon"></span> Not connected';
                     statusDiv.className = 'status-value status-disconnected';
-                    ipDiv.innerHTML = 'No Connection';
-                    ipDiv.style.color = '#ff9800';
+                    ipDiv.textContent = 'Not connected yet';
+                    ipDiv.className = 'ip-display is-warn';
                     mainLink.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Error fetching status:', error);
-                document.getElementById('status').innerHTML = '<span class="status-icon"></span> Error loading status';
+                document.getElementById('status').innerHTML = '<span class="status-icon"></span> Status could not be read. Retrying.';
                 document.getElementById('status').className = 'status-value status-disconnected';
             }
         }
-        
+
         // Update immediately on load
         updateStatus();
-        
+
         // Then update every 5 seconds
         setInterval(updateStatus, 5000);
     </script>

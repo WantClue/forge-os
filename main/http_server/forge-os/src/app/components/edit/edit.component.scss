@@ -1,293 +1,76 @@
+// Performance and cooling form (Settings page, and the Swarm edit modal).
+:host { display: block; }
 
-:host {
-  --warning-color: #f59e0b;
-  --danger-gradient: linear-gradient(135deg, #ef4444, #dc2626);
-
-  display: block;
-}
-
-.pi {
-  right: 1rem;
-  font-size: 1.5rem;
-  top: 1rem;
-}
-
-// Performance Mode Buttons with Color Coding
-.performance-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
-
-  i {
-    font-size: 1.1rem;
-  }
-
-  .eco-icon {
-    width: 1.1rem;
-    height: 1.1rem;
-    flex-shrink: 0;
-  }
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-}
-
-// Eco Mode - Green theme (energy efficient, sustainable)
-::ng-deep .eco-mode {
-  background: linear-gradient(135deg, #10b981, #059669) !important;
-  border-color: #10b981 !important;
-  color: white !important;
-
-  &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #059669, #047857) !important;
-    border-color: #059669 !important;
-  }
-
-  &:focus {
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3) !important;
-  }
-}
-
-// Medium Mode - Orange theme (balanced performance)
-::ng-deep .medium-mode {
-  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-  border-color: #f59e0b !important;
-  color: white !important;
-
-  &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #d97706, #b45309) !important;
-    border-color: #d97706 !important;
-  }
-
-  &:focus {
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3) !important;
-  }
-}
-
-// Power Mode - Red theme (high performance, maximum power)
-::ng-deep .power-mode {
-  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-  border-color: #ef4444 !important;
-  color: white !important;
-
-  &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
-    border-color: #dc2626 !important;
-  }
-
-  &:focus {
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3) !important;
-  }
-}
-
-// Form Elements
-.field {
-  margin-bottom: 1.5rem;
-
-  label {
-    color: var(--text-secondary);
-    font-weight: 500;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
-    display: block;
-  }
-}
-
-// Input Styling
-::ng-deep .p-inputtext {
-  background: rgba(30, 41, 59, 0.8) !important;
-  border: 1px solid var(--card-border) !important;
-  border-radius: 0.5rem !important;
-  padding: 0.75rem 1rem !important;
-  color: var(--text-primary) !important;
-  transition: all 0.3s ease !important;
-
-  &:focus {
-    outline: none !important;
-    border-color: #6366f1 !important;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
-  }
-
-  &::placeholder {
-    color: var(--text-muted) !important;
-  }
-}
-
-// Button Styling
-::ng-deep .p-button {
-  border-radius: 0.5rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
+.edit-section {
+  margin: 0 0 1.75rem;
+  padding: 0;
   border: none;
-
-  // Primary buttons
-  &:not(.p-button-secondary):not(.p-button-danger) {
-    background: var(--primary-gradient);
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, #5855f1, #059baa);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  // Secondary buttons (Performance mode)
-  &.p-button-secondary {
-    background: rgba(30, 41, 59, 0.8);
-    border: 1px solid var(--card-border);
-    color: var(--text-primary);
-
-    &:hover:not(:disabled) {
-      background: var(--primary-gradient);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  // Danger buttons
-  &.p-button-danger {
-    background: var(--danger-gradient);
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, #dc2626, #b91c1c);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  &:disabled {
-    background: rgba(30, 41, 59, 0.5) !important;
-    color: var(--text-muted) !important;
-    cursor: not-allowed !important;
-    transform: none !important;
-  }
+  min-width: 0;
 }
 
-// Checkbox Styling
-::ng-deep .field-checkbox {
-  display: flex;
-  align-items: center;
+.edit-section-title {
+  margin-bottom: 0.875rem;
+  padding: 0;
+  font-size: var(--fs-md);
+  color: var(--text);
+}
+
+.edit-hint {
+  display: block;
+  margin-top: 0.625rem;
+  color: var(--ash-dim);
+  font-size: 0.8125rem;
+}
+
+// Preset picker: three options, the active one marked with a steel edge.
+.mode-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
   gap: 0.75rem;
-  margin-bottom: 1rem;
-
-  .p-checkbox {
-    .p-checkbox-box {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid var(--card-border);
-      border-radius: 0.375rem;
-      width: 1.125rem;
-      height: 1.125rem;
-      transition: all 0.3s ease;
-
-      &:hover {
-        border-color: #6366f1;
-      }
-
-      &.p-highlight {
-        background: var(--primary-gradient);
-        border-color: #6366f1;
-      }
-
-      .p-checkbox-icon {
-        color: white;
-        font-size: 0.75rem;
-      }
-    }
-  }
-
-  label {
-    color: var(--text-primary);
-    font-weight: 500;
-    cursor: pointer;
-    font-size: 0.9rem;
-    text-transform: none;
-    letter-spacing: normal;
-  }
 }
 
-// Slider Styling
-::ng-deep .p-slider {
-  background: rgba(30, 41, 59, 0.8);
-  border-radius: 0.5rem;
-  height: 0.375rem;
+.mode-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  background: transparent;
+  border: 1px solid var(--scale-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
 
-  .p-slider-range {
-    background: var(--primary-gradient);
-    border-radius: 0.5rem;
-  }
+  &:hover { border-color: var(--steel); background: var(--anvil-raised); }
 
-  .p-slider-handle {
-    background: white;
-    border: 2px solid #6366f1;
-    border-radius: 50%;
-    width: 1.25rem;
-    height: 1.25rem;
-    margin-top: -0.4375rem;
-    margin-left: -0.625rem;
-    transition: all 0.3s ease;
-
-    &:hover {
-      transform: scale(1.1);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-    }
+  &.is-active {
+    border-color: var(--steel);
+    background: rgba(143, 166, 191, 0.08);
+    box-shadow: inset 3px 0 0 var(--steel);
   }
 }
+.mode-name { font-size: var(--fs-lg); }
+.mode-values { color: var(--ash); font-size: var(--fs-sm); }
+.mode-desc { color: var(--ash-dim); font-size: 0.8125rem; }
 
-// Alert Messages
-::ng-deep .p-message {
-  border-radius: 0.75rem !important;
-  margin-bottom: 1.5rem;
+.overheat-reset {
+  margin: 0 0 1.75rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(242, 120, 92, 0.4);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: rgba(242, 120, 92, 0.06);
 
-  &.p-message-warn {
-    background: rgba(245, 158, 11, 0.1) !important;
-    border-color: rgba(245, 158, 11, 0.3) !important;
-    color: #fcd34d !important;
-
-    .p-message-wrapper {
-      padding: 1rem 1.5rem;
-    }
-
-    .p-message-text {
-      font-weight: 500;
-    }
-  }
+  p { margin: 0 0 0.875rem; max-width: 60ch; line-height: 1.5; }
 }
 
-// Tooltip Styling
-::ng-deep .p-tooltip {
-  .p-tooltip-text {
-    background: rgba(30, 41, 59, 0.95);
-    border: 1px solid var(--card-border);
-    border-radius: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    color: var(--text-primary);
-    font-size: 0.875rem;
-  }
-
-  .p-tooltip-arrow {
-    border-top-color: rgba(30, 41, 59, 0.95);
-  }
+.fan-manual { margin-top: 0.5rem; max-width: 32rem; }
+.fan-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 0.875rem;
+  > span:first-child { color: var(--ash); font-size: var(--fs-sm); }
 }
+.fan-warning { display: block; margin-top: 0.75rem; color: var(--bad); font-size: 0.8125rem; }

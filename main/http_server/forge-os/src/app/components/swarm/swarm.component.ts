@@ -7,6 +7,7 @@ import { LocalStorageService } from 'src/app/local-storage.service';
 import { SystemService } from 'src/app/services/system.service';
 import { ModalComponent } from '../modal/modal.component';
 import { ISystemInfo } from 'src/models/ISystemInfo';
+import { heatColor, hottestTemp } from 'src/app/utils/heat';
 
 const SWARM_DATA = 'SWARM_DATA';
 const SWARM_REFRESH_TIME = 'SWARM_REFRESH_TIME';
@@ -342,16 +343,28 @@ export class SwarmComponent implements OnInit, OnDestroy {
       case axe.overheat_mode === 1:
         return { color: 'red', msg: 'Overheated' };
       case !!axe.power_fault:
-        return { color: 'red', msg: 'Power Fault' };
+        return { color: 'red', msg: 'Power fault' };
       case !axe.frequency || axe.frequency < 400:
-        return { color: 'orange', msg: 'Frequency Low' };
+        return { color: 'orange', msg: 'Low frequency' };
       case axe.isUsingFallbackStratum === 1:
-        return { color: 'orange', msg: 'Fallback Pool' };
+        return { color: 'orange', msg: 'On fallback pool' };
       case axe.blockFound === 1:
         return { color: 'green', msg: 'Block found' };
       default:
         return undefined;
     }
+  }
+
+  public notificationTag(color: string): string {
+    return color === 'red' ? 'is-bad' : color === 'green' ? 'is-ok' : 'is-warn';
+  }
+
+  public hottestTemp(axe: any): number {
+    return Math.max(axe.temp || 0, axe.temp2 || 0);
+  }
+
+  public heat(axe: any): string {
+    return heatColor(hottestTemp([axe.temp, axe.temp2], axe.vrTemp));
   }
 
 }

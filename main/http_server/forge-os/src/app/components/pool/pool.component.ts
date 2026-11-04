@@ -46,7 +46,7 @@ export class PoolComponent implements OnInit {
 
   poolModes = [
     { label: 'Fallback', value: 0 },
-    { label: 'Dual Pool', value: 1 }
+    { label: 'Dual', value: 1 }
   ];
 
   sv2ChannelTypes = [
@@ -125,7 +125,7 @@ export class PoolComponent implements OnInit {
   private buildProtocolOptions(dualPool: boolean) {
     return [
       { label: 'Stratum V1', value: 0, disabled: false },
-      { label: dualPool ? 'Stratum V2 (not available in Dual Pool mode)' : 'Stratum V2', value: 1, disabled: dualPool }
+      { label: dualPool ? 'Stratum V2 (not available in dual mode)' : 'Stratum V2', value: 1, disabled: dualPool }
     ];
   }
 

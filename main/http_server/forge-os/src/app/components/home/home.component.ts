@@ -5,15 +5,7 @@ import { TruncateMiddlePipe } from "src/app/pipes/truncate-middle.pipe"
 import { QuicklinkService } from "src/app/services/quicklink.service"
 import { SystemService } from "src/app/services/system.service"
 import type { ICoinbase, ISystemInfo } from "src/models/ISystemInfo"
-
-// Forge glow: cool steel when idle, straw to orange while mining normally,
-// ember at the firmware's shutoff (75 °C for ASICs, 105 °C for the VR).
-const HEAT_STOPS: Array<[number, [number, number, number]]> = [
-  [0.53, [143, 166, 191]], // steel
-  [0.73, [242, 196, 109]], // straw
-  [0.87, [247, 137, 43]],  // forge orange
-  [1.0, [229, 72, 43]],    // ember
-]
+import { heatColor, hottestTemp } from "src/app/utils/heat"
 
 interface ICoinbaseCard {
   label: string
@@ -278,35 +270,17 @@ export class HomeComponent {
     return this.calculateAverage(efficiencies)
   }
 
-  // Hottest component relative to its own shutoff, so the hero glows for
-  // whichever part is closest to tripping.
   public hottestTemp(info: ISystemInfo): number {
-    const asic = Math.max(info.chiptemp1 || 0, info.chiptemp2 || 0, info.temp || 0)
-    const vrAsAsicScale = info.vrTemp > 0 ? (info.vrTemp / 105) * 75 : 0
-    return Math.max(asic, vrAsAsicScale)
+    return hottestTemp([info.chiptemp1, info.chiptemp2, info.temp], info.vrTemp)
   }
 
-  public heatColor(temp: number, shutoff = 75): string {
-    const t = Math.max(0, temp) / shutoff
-    if (t <= HEAT_STOPS[0][0]) return this.rgb(HEAT_STOPS[0][1])
-    for (let i = 1; i < HEAT_STOPS.length; i++) {
-      const [pos, color] = HEAT_STOPS[i]
-      if (t <= pos) {
-        const [prevPos, prevColor] = HEAT_STOPS[i - 1]
-        const k = (t - prevPos) / (pos - prevPos)
-        return this.rgb(prevColor.map((c, j) => c + (color[j] - c) * k) as [number, number, number])
-      }
-    }
-    return this.rgb(HEAT_STOPS[HEAT_STOPS.length - 1][1])
+  public heatColor(temp: number, shutoff?: number): string {
+    return heatColor(temp, shutoff)
   }
 
   public pct(value: number, max: number): number {
     if (!max || !value) return 0
     return Math.min(100, Math.max(0, (value / max) * 100))
-  }
-
-  private rgb([r, g, b]: [number, number, number]): string {
-    return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`
   }
 
   public isDualPool(info: ISystemInfo): boolean {

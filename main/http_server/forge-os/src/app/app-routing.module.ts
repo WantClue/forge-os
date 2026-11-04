@@ -17,7 +17,8 @@ const routes: Routes = [
       children: [
         {
           path: '',
-          component: NetworkComponent
+          component: NetworkComponent,
+          data: { title: 'Wi-Fi setup' }
         }
       ]
   },
@@ -28,27 +29,33 @@ const routes: Routes = [
     children: [
       {
         path: '',
-        component: HomeComponent
+        component: HomeComponent,
+        data: { title: 'Dashboard' }
       },
       {
         path: 'logs',
-        component: LogsComponent
+        component: LogsComponent,
+        data: { title: 'Logs' }
       },
       {
         path: 'network',
-        component: NetworkComponent
+        component: NetworkComponent,
+        data: { title: 'Network' }
       },
       {
         path: 'settings',
-        component: SettingsComponent
+        component: SettingsComponent,
+        data: { title: 'Settings' }
       },
       {
         path: 'swarm',
-        component: SwarmComponent
+        component: SwarmComponent,
+        data: { title: 'Swarm' }
       },
       {
         path: 'pool',
-        component: PoolComponent
+        component: PoolComponent,
+        data: { title: 'Pools' }
       }
     ]
   },

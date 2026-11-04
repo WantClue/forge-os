@@ -200,11 +200,11 @@
             <dl class="facts">
                 <ng-container *ngIf="!info.isUsingFallbackStratum">
                     <div><dt>Address</dt><dd><a [href]="(quickLink$ | async)" target="_blank" rel="noopener noreferrer">{{info.stratumURL}}:{{info.stratumPort}}</a></dd></div>
-                    <div><dt>Worker</dt><dd class="code" [title]="info.stratumUser">{{info.stratumUser | truncateMiddle:10:8}}</dd></div>
+                    <div><dt>User</dt><dd class="code" [title]="info.stratumUser">{{info.stratumUser | truncateMiddle:10:8}}</dd></div>
                 </ng-container>
                 <ng-container *ngIf="info.isUsingFallbackStratum">
                     <div><dt>Address</dt><dd><a [href]="(fallbackQuickLink$ | async) || info.fallbackStratumURL" target="_blank" rel="noopener noreferrer">{{info.fallbackStratumURL}}:{{info.fallbackStratumPort}}</a></dd></div>
-                    <div><dt>Worker</dt><dd class="code" [title]="info.fallbackStratumUser">{{info.fallbackStratumUser | truncateMiddle:10:8}}</dd></div>
+                    <div><dt>User</dt><dd class="code" [title]="info.fallbackStratumUser">{{info.fallbackStratumUser | truncateMiddle:10:8}}</dd></div>
                 </ng-container>
                 <div><dt>Protocol</dt><dd>{{(info.isUsingFallbackStratum ? info.fallbackStratumProtocol : info.stratumProtocol) === 1 ? 'Stratum V2' : 'Stratum V1'}}</dd></div>
                 <div><dt>Share difficulty</dt><dd class="num">{{info.stratumDiff > 0 ? info.stratumDiff : 'Not set yet'}}</dd></div>

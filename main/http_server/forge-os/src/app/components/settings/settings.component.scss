@@ -1,430 +1,101 @@
-// CSS Custom Properties - Matching home component
-:host {
-  --card-bg: rgba(30, 41, 59, 0.5);
-  --card-border: rgba(51, 65, 85, 0.3);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --success-color: #10b981;
-  --error-color: #ef4444;
-  --warning-color: #f59e0b;
-  --primary-gradient: linear-gradient(135deg, #6366f1, #06b6d4);
+// Settings page. Panels, facts and tags come from src/_forge.scss.
+:host { display: block; }
 
+.settings-hint {
   display: block;
-  padding-top: 2rem;
+  margin-top: 0.625rem;
+  color: var(--ash-dim);
+  font-size: 0.8125rem;
 }
 
-// Base card styles - Matching home component
-%base-card {
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid var(--card-border);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
+.settings-status {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0 0 0.875rem;
+  color: var(--ash);
+  &.is-bad { color: var(--bad); }
 }
 
-// Override PrimeNG card styles
-::ng-deep .p-card {
-  @extend %base-card;
-  margin-bottom: 1.5rem;
+.settings-release-name { margin: 0.75rem 0 0.5rem; font-size: var(--fs-lg); }
 
-  .p-card-header {
-    background: transparent;
-    border-bottom: 1px solid var(--card-border);
-    padding: 1rem 1.5rem;
-  }
-
-  .p-card-content, .p-card-body {
-    background: transparent;
-    color: var(--text-primary);
-    padding: 1.5rem;
-  }
-
-  .p-card-title, h2, h5 {
-    color: var(--text-primary);
-    font-weight: 600;
-    margin-bottom: 1rem;
-  }
-
-  .p-card-title {
-    font-size: 1.5rem;
-  }
-
-  h2 {
-    font-size: 1.25rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  h5 {
-    font-size: 1rem;
-    color: var(--text-secondary);
-  }
-
-  small {
-    color: var(--text-muted);
-    font-size: 0.875rem;
-    display: block;
-    margin-top: 0.5rem;
+.settings-assets {
+  margin: 0 0 1rem; padding: 0; list-style: none;
+  li {
+    display: flex; justify-content: space-between; gap: 1rem;
+    padding: 0.375rem 0;
+    font-size: var(--fs-sm);
+    .num { color: var(--ash); }
   }
 }
 
-// Settings Grid Layout
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.settings-update-grid {
-  align-items: stretch;
-}
-
-.settings-update-column {
-  display: flex;
-}
-
-.settings-update-card {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.settings-upload-card {
-  h2 {
-    margin-bottom: 1rem;
-  }
-
-  small {
-    margin-top: 0.5rem;
-  }
-}
-
-// Version and Update Cards
-.version-card, .update-card {
-  @extend %base-card;
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 4px;
-    height: 100%;
-    background: var(--primary-gradient);
-  }
-}
-
-.version-card::before {
-  background: linear-gradient(135deg, #14b8a6, #06b6d4);
-}
-
-.update-card::before {
-  background: linear-gradient(135deg, #f59e0b, #eab308);
-}
-
-// Form Elements Styling
-input[type="text"],
-input[type="number"],
-input[type="password"],
-input[type="range"] {
-  min-width: 250px;
-  max-width: 90%;
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid var(--card-border);
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  color: var(--text-primary);
-  transition: all 0.3s ease;
-
-  &:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  }
-
-  &::placeholder {
-    color: var(--text-muted);
-  }
-}
-
-select {
-  min-width: 268px;
-  max-width: 90%;
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid var(--card-border);
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  color: var(--text-primary);
-  transition: all 0.3s ease;
-
-  &:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  }
-
-  option {
-    background: rgba(30, 41, 59, 0.95);
-    color: var(--text-primary);
-  }
-}
-
-// Button Styling Override
-::ng-deep .p-button {
-  background: var(--primary-gradient);
-  border: none;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-}
-
-// FileUpload Styling
-::ng-deep .p-fileupload {
-  .p-button {
-    background: var(--primary-gradient);
-    border: none;
-    border-radius: 0.5rem;
-
-    &:hover {
-      background: linear-gradient(135deg, #5855f1, #059baa);
-    }
-  }
-}
-
-::ng-deep .settings-upload-card {
-  .p-fileupload-basic {
-    justify-content: flex-start;
-    min-height: 3rem;
-  }
-
-  .p-fileupload-choose-button.p-button {
-    min-height: 2.75rem;
-    padding: 0.75rem 1.5rem;
-    line-height: 1;
-  }
-}
-
-// Progress Bar for Updates
-.update-progress {
+.settings-progress {
   margin-top: 1rem;
-
-  ::ng-deep .p-progressbar {
-    background: rgba(30, 41, 59, 0.8);
-    border-radius: 0.5rem;
-    height: 0.5rem;
-
-    .p-progressbar-value {
-      background: var(--primary-gradient);
-      border-radius: 0.5rem;
-    }
-  }
+  p { margin: 0 0 0.5rem; color: var(--ash); font-size: var(--fs-sm); }
 }
 
-// Links
-a {
-  color: #6366f1;
-  text-decoration: none;
-  font-weight: 500;
-  transition: color 0.3s ease;
-
-  &:hover {
-    color: #06b6d4;
-    text-decoration: underline;
-  }
+.settings-notes {
+  margin-top: 1.25rem;
+  h3 { margin: 0 0 0.5rem; font-size: var(--fs-md); color: var(--ash); }
 }
 
-// Status badges for versions
-.version-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid;
-
-  &.current {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.3);
-    color: #10b981;
-  }
-
-  &.update-available {
-    background: rgba(245, 158, 11, 0.1);
-    border-color: rgba(245, 158, 11, 0.3);
-    color: #f59e0b;
-  }
-}
-
-// Restart section
-.restart {
-  margin-bottom: 1.5rem;
-  @extend %base-card;
-}
-
-// Asset links styling
-.asset-links {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 1rem;
-
-  a {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: 0.375rem;
-    color: #6366f1;
-    font-weight: 500;
-    text-decoration: none;
-    transition: all 0.3s ease;
-
-    &:hover {
-      background: rgba(99, 102, 241, 0.2);
-      transform: translateX(4px);
-    }
-
-    &::before {
-      content: '↓';
-      font-weight: bold;
-    }
-  }
-}
-
-// Responsive Design
-@media only screen and (min-width: 900px) {
-  input[type="text"],
-  input[type="password"],
-  input[type="number"],
-  input[type="range"] {
-    min-width: 500px;
-  }
-
-  select {
-    min-width: 518px;
-  }
-
-  .settings-grid {
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .version-card, .update-card {
-    padding: 1rem;
-  }
-
-  input[type="text"],
-  input[type="password"],
-  input[type="number"],
-  input[type="range"],
-  select {
-    min-width: 100%;
-    max-width: 100%;
-  }
-}
-
-// GitHub update is the recommended path - give it visual weight
-.settings-github-card {
-  position: relative;
-  border: 1px solid rgba(99, 102, 241, 0.5);
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15), 0 8px 30px rgba(99, 102, 241, 0.15);
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 4px;
-    height: 100%;
-    background: var(--primary-gradient);
-    border-radius: 1rem 0 0 1rem;
-  }
-}
-
-// Release notes rendered from the GitHub release body
 .release-notes {
   max-height: 16rem;
   overflow-y: auto;
   padding: 0.75rem 1rem;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--card-border);
-  border-radius: 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  line-height: 1.5;
+  border: 1px solid var(--scale);
+  border-radius: var(--radius);
+  background: var(--quench);
+  color: var(--ash);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
 
   ::ng-deep {
-    h4 {
-      color: var(--text-primary);
-      font-size: 1rem;
-      margin: 0.75rem 0 0.25rem;
-
-      &:first-child {
-        margin-top: 0;
-      }
-    }
-
-    ul {
-      margin: 0 0 0.5rem;
-      padding-left: 1.25rem;
-    }
-
-    p {
-      margin: 0 0 0.5rem;
-    }
-
-    strong {
-      color: var(--text-primary);
-    }
+    h4 { color: var(--text); font-size: var(--fs-md); font-weight: 400; margin: 0.75rem 0 0.25rem; &:first-child { margin-top: 0; } }
+    ul { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+    p { margin: 0 0 0.5rem; }
+    strong { color: var(--text); font-weight: 400; }
   }
 }
 
-// Manual (customized) firmware install is tucked away behind a toggle
-.settings-manual-toggle {
-  small {
-    display: block;
-    color: var(--warning-color);
-    margin-top: 0.25rem;
-  }
+// Manual install disclosure
+.settings-manual { padding-top: 1rem; padding-bottom: 1rem; }
 
-  ::ng-deep .p-button.p-button-text {
-    background: transparent;
-    color: var(--text-secondary);
-    padding: 0.5rem 0.75rem;
-
-    &:hover {
-      color: var(--text-primary);
-      box-shadow: none;
-    }
-  }
+.settings-disclosure {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.25rem 0;
+  background: none; border: none;
+  color: var(--ash); font-size: var(--fs-md);
+  cursor: pointer;
+  &:hover { color: var(--text); }
+  i { font-size: 0.75rem; }
 }
+
+.settings-warning {
+  margin: 0.75rem 0 1.25rem;
+  max-width: 64ch;
+  color: var(--warn); font-size: var(--fs-sm); line-height: 1.5;
+}
+
+.settings-uploads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 1.25rem;
+}
+.settings-upload h3 { margin: 0 0 0.625rem; font-size: var(--fs-sm); color: var(--ash); }
+
+::ng-deep .settings-upload .p-fileupload-basic { justify-content: flex-start; }
+::ng-deep .settings-upload .p-fileupload-choose-button.p-button {
+  background: transparent;
+  border-color: var(--scale-strong);
+  color: var(--text);
+  &:hover { background: var(--anvil-raised); border-color: var(--steel); }
+}
+
+// Update dialog
+.update-dialog {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0.875rem;
+  padding: 0.5rem 0 1rem;
+}
+.update-step { margin: 0; font-size: var(--fs-lg); }
+.update-note { margin: 0; color: var(--ash); font-size: var(--fs-sm); }
+.update-icon { font-size: 2.5rem; &.is-ok { color: var(--ok); } &.is-bad { color: var(--bad); } }
+.update-message { margin: 0; line-height: 1.5; &.is-bad { color: var(--bad); } }

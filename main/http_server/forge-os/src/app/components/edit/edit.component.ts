@@ -8,6 +8,8 @@ import { SystemService } from 'src/app/services/system.service';
 import { eASICModel } from 'src/models/enum/eASICModel';
 import { ActivatedRoute } from '@angular/router';
 
+import { PERFORMANCE_MODES, type PerformanceMode, type PerformanceModeId } from 'src/app/utils/performance-modes';
+
 @Component({
     selector: 'app-edit',
     templateUrl: './edit.component.html',
@@ -152,25 +154,14 @@ export class EditComponent implements OnInit, OnDestroy {
     }
   }
 
-  setPerformanceMode(mode: 'eco' | 'medium' | 'power') {
-    let frequency: number;
-    let coreVoltage: number;
+  public readonly performanceModes = PERFORMANCE_MODES;
 
-    // Set predefined values based on performance mode
-    switch (mode) {
-      case 'eco':
-        frequency = 430;
-        coreVoltage = 1000;
-        break;
-      case 'medium':
-        frequency = 525; // default
-        coreVoltage = 1150; // default
-        break;
-      case 'power':
-        frequency = 610;
-        coreVoltage = 1200;
-        break;
-    }
+  public isActiveMode(mode: PerformanceMode): boolean {
+    return Number(this.form?.value.frequency) === mode.frequency && Number(this.form?.value.coreVoltage) === mode.coreVoltage;
+  }
+
+  setPerformanceMode(id: PerformanceModeId) {
+    const { frequency, coreVoltage } = PERFORMANCE_MODES.find((m) => m.id === id)!;
 
     // Update form values
     this.form.patchValue({
@@ -178,7 +169,7 @@ export class EditComponent implements OnInit, OnDestroy {
       coreVoltage: coreVoltage
     });
 
-    console.log(`Performance mode set to: ${mode} (Frequency: ${frequency}, Voltage: ${coreVoltage})`);
+    console.log(`Performance mode set to: ${id} (Frequency: ${frequency}, Voltage: ${coreVoltage})`);
 
     // Instantly apply the settings
     this.updateSystem();

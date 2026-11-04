@@ -1,108 +1,83 @@
 <ng-container *ngIf="form != null">
-    <form [formGroup]="form">
+    <form [formGroup]="form" class="edit-form">
 
-        <p-message *ngIf="settingsUnlocked" severity="warn" styleClass="w-full mb-3 py-4 border-round-xl"
-            text="Custom settings can cause damage & system instability. Only modify these settings if you understand the risks of running outside designed parameters.">
+        <p-message *ngIf="settingsUnlocked" severity="warn" styleClass="alert-message mb-4"
+            text="Overclock mode is on. Values outside the presets can damage the miner or make it unstable. Change them only if you understand the risk.">
         </p-message>
 
-        <!-- Performance Mode Buttons - Show only when overclock mode is disabled -->
-        <ng-container *ngIf="!settingsUnlocked && restrictedModels.includes(ASICModel)">
-            <div class="mb-4">
-                <h1 class="text-2xl font-bold mb-3">Performance Mode</h1>
-                <div class="flex gap-3 flex-wrap justify-center">
-                    <button pButton type="button"
-                            class="performance-btn eco-mode p-button-rounded py-3"
-                            style="min-width: 140px;"
-                            (click)="setPerformanceMode('eco')">
-                        <!-- PrimeIcons has no leaf icon, so draw one inline -->
-                        <svg class="eco-icon mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
-                            <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
-                        </svg>
-                        <span>Eco</span>
-                    </button>
-                    <button pButton type="button"
-                            class="performance-btn medium-mode p-button-rounded py-3"
-                            style="min-width: 140px;"
-                            (click)="setPerformanceMode('medium')">
-                        <i class="pi pi-gauge mr-2"></i>
-                        <span>Medium</span>
-                    </button>
-                    <button pButton type="button"
-                            class="performance-btn power-mode p-button-rounded py-3"
-                            style="min-width: 140px;"
-                            (click)="setPerformanceMode('power')">
-                        <i class="pi pi-bolt mr-2"></i>
-                        <span>Power</span>
-                    </button>
-                </div>
+        <!-- Presets, shown while overclock mode is off -->
+        <fieldset class="edit-section" *ngIf="!settingsUnlocked && restrictedModels.includes(ASICModel)">
+            <legend class="edit-section-title">Performance</legend>
+            <div class="mode-picker" role="group" aria-label="Performance mode">
+                <button type="button" *ngFor="let mode of performanceModes"
+                        class="mode-option" [class.is-active]="isActiveMode(mode)"
+                        [attr.aria-pressed]="isActiveMode(mode)"
+                        (click)="setPerformanceMode(mode.id)">
+                    <span class="mode-name">{{ mode.label }}</span>
+                    <span class="mode-values num">{{ mode.frequency }} MHz, {{ mode.coreVoltage }} mV</span>
+                    <span class="mode-desc">{{ mode.description }}</span>
+                </button>
             </div>
-        </ng-container>
+            <small class="edit-hint">Choosing a mode saves it right away.</small>
+        </fieldset>
 
-        <!-- Frequency / voltage inputs - shown only when overclock mode is enabled -->
-
-        <ng-container *ngIf="settingsUnlocked === true">
-
+        <!-- Manual values, shown while overclock mode is on -->
+        <fieldset class="edit-section" *ngIf="settingsUnlocked === true">
+            <legend class="edit-section-title">Performance</legend>
             <div class="field grid p-fluid">
-                <label htmlFor="frequency" class="col-12 mb-2 md:col-2 md:mb-0">Frequency</label>
-                <div class="col-12 md:col-10">
+                <label for="frequency" class="col-12 mb-2 md:col-3 md:mb-0">Frequency (MHz)</label>
+                <div class="col-12 md:col-9">
                     <input pInputText id="frequency" formControlName="frequency" type="number" />
                 </div>
             </div>
 
             <div class="field grid p-fluid">
-                <label htmlFor="coreVoltage" class="col-12 mb-2 md:col-2 md:mb-0">Core Voltage</label>
-                <div class="col-12 md:col-10">
+                <label for="coreVoltage" class="col-12 mb-2 md:col-3 md:mb-0">Core voltage (mV)</label>
+                <div class="col-12 md:col-9">
                     <input pInputText id="coreVoltage" formControlName="coreVoltage" type="number" />
                 </div>
             </div>
+        </fieldset>
 
-        </ng-container>
-
-        <div class="col-12" *ngIf="form.get('overheat_mode')?.value === 1">
-            <button pButton type="button" label="Disable Overheat Mode"
-                    class="p-button-danger w-full py-3"
+        <div class="overheat-reset" *ngIf="form.get('overheat_mode')?.value === 1">
+            <p>
+                The miner shut itself off after overheating. Set frequency and core voltage first,
+                then clear overheat mode to start mining again.
+            </p>
+            <button pButton type="button" label="Clear overheat mode" class="p-button-danger"
                     (click)="disableOverheatMode()">
             </button>
-            <small class="block mt-1 text-center" style="color: #ff0000;">
-                Make sure to reset Frequency and Voltage before clicking this button.
-            </small>
         </div>
 
-        <div class="col-12">
+        <fieldset class="edit-section">
+            <legend class="edit-section-title">Cooling</legend>
             <div class="field-checkbox">
                 <p-checkbox name="autofanspeed" formControlName="autofanspeed" inputId="autofanspeed"
                     [binary]="true"></p-checkbox>
-                <label for="autofanspeed">Automatic Fan Control</label>
+                <label for="autofanspeed">Control the fan automatically</label>
             </div>
-        </div>
 
-        <div *ngIf="form.controls['autofanspeed'].value != true">
-            <div class="col-12">
-                <label>Fan Speed {{form.controls['manualFanSpeed'].value}}%
-                    <b *ngIf="form.controls['manualFanSpeed'].value < 33" style="color:red">Danger: Could Cause
-                        Overheating</b> <b *ngIf="form.controls['manualFanSpeed'].value == 100" style="color:	#F2A900">S19
-                        Simulator</b></label>
-
-                <p-slider formControlName="manualFanSpeed"></p-slider>
+            <div class="fan-manual" *ngIf="form.controls['autofanspeed'].value != true">
+                <div class="fan-head">
+                    <span id="fanSpeedLabel">Fan speed</span>
+                    <span class="num">{{form.controls['manualFanSpeed'].value}}%</span>
+                </div>
+                <p-slider formControlName="manualFanSpeed" ariaLabelledBy="fanSpeedLabel"></p-slider>
+                <small class="fan-warning" *ngIf="form.controls['manualFanSpeed'].value < 33">
+                    Below 33% the chips can overheat.
+                </small>
+                <small class="edit-hint" *ngIf="form.controls['manualFanSpeed'].value == 100">
+                    Full speed: the S19 simulator.
+                </small>
             </div>
-        </div>
+        </fieldset>
 
-        <div class="mt-2">
-            <button pButton [disabled]="!form.dirty || form.invalid" (click)="updateSystem()"
-                class="btn btn-primary mr-2">Save</button>
-
-        </div>
-
-        <div class="mt-2">
-
-            <button *ngIf="settingsUnlocked" pButton (click)="toggleOverclockMode(false)"
-                    class="p-button-danger" pTooltip="Return to safe preset values only">
-                Disable Overclock Mode
+        <div class="form-actions">
+            <button pButton type="button" [disabled]="!form.dirty || form.invalid" (click)="updateSystem()">Save</button>
+            <button *ngIf="settingsUnlocked" pButton type="button" (click)="toggleOverclockMode(false)"
+                    class="p-button-secondary form-actions-end" pTooltip="Go back to the Eco, Medium and Power presets">
+                Turn off overclock mode
             </button>
         </div>
-
-
     </form>
 </ng-container>

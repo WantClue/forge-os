@@ -1,31 +1,10 @@
-// BitForge dashboard
-// One bold element: the hashrate readout, lit by the hottest chip's heat colour.
-// Everything else is quiet steel: hairline panels, no shadows, no gradients.
+// Dashboard. Shared tokens and primitives (.panel, .facts, .gauge, .tag,
+// .heat-dot) live in src/_forge.scss; this file holds only the dashboard's own
+// pieces. The one bold element is the hashrate, lit by the hottest chip.
 
 :host {
-  --ash: #8a9bb0;           // secondary text
-  --ash-dim: #64768b;       // tertiary text
-  --scale: rgba(138, 155, 176, 0.14); // hairlines
-  --scale-strong: rgba(138, 155, 176, 0.24);
-  --steel: #8fa6bf;         // cool gauges, hashrate line
-  --text: var(--text-color, #e6edf5);
-  --panel: var(--surface-card, #0b1219);
-  --ok: #6fcf97;
-  --bad: #f2785c;
-  --warn: #f2c46d;
-  --heat: var(--steel);     // overwritten per element from heatColor()
-
   display: block;
-  padding-top: 1.5rem;
-  color: var(--text);
   font-variant-numeric: tabular-nums;
-}
-
-.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8125rem;
-  word-break: break-all;
 }
 
 .loading-state {
@@ -35,14 +14,7 @@
   p { margin: 0; }
 }
 
-// ---------- Alerts ----------
 .alerts { display: grid; gap: 0.5rem; margin-bottom: 1.5rem; }
-
-::ng-deep .alert-message {
-  border-radius: 4px;
-  &.p-message-error { background: rgba(242, 120, 92, 0.08) !important; border: 1px solid rgba(242, 120, 92, 0.35) !important; color: #f8b3a3 !important; }
-  &.p-message-warn  { background: rgba(242, 196, 109, 0.08) !important; border: 1px solid rgba(242, 196, 109, 0.35) !important; color: #f6dca8 !important; }
-}
 
 // ---------- Block found ----------
 .block-found {
@@ -51,18 +23,17 @@
   margin-bottom: 1.5rem; padding: 1rem 1.25rem;
   border: 1px solid rgba(var(--accent), 0.45);
   border-left-width: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: rgba(var(--accent), 0.06);
   &.block-confirmed { --accent: 111, 207, 151; }
   &.block-orphaned  { --accent: 242, 120, 92; }
 
   > i { font-size: 1.5rem; color: rgb(var(--accent)); margin-top: 0.125rem; }
-  b { display: block; font-size: 1.125rem; font-weight: 400; margin-bottom: 0.25rem; }
+  b { display: block; font-size: var(--fs-lg); font-weight: 400; margin-bottom: 0.25rem; }
 }
 .block-found-text { min-width: 0; }
 .block-found-meta {
-  display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; color: var(--ash); font-size: 0.875rem;
-  a { color: var(--steel); }
+  display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; color: var(--ash); font-size: var(--fs-sm);
 }
 
 // ---------- Forge (hero) ----------
@@ -71,8 +42,8 @@
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   margin-bottom: 1.5rem;
   border: 1px solid var(--scale);
-  border-radius: 6px;
-  background: var(--panel);
+  border-radius: var(--radius-lg);
+  background: var(--anvil);
   overflow: hidden;
 }
 
@@ -93,17 +64,16 @@
 
 .forge-label {
   margin: 0 0 0.25rem;
-  font-size: 0.875rem; font-weight: 400; color: var(--ash);
+  font-size: var(--fs-sm); color: var(--ash);
 }
 
 .forge-value {
-  font-size: clamp(3rem, 8vw, 4.5rem);
+  font-size: var(--fs-hero);
   line-height: 1;
   letter-spacing: -0.02em;
   color: var(--heat);
   text-shadow: 0 0 28px color-mix(in srgb, var(--heat) 35%, transparent);
   transition: color 1.2s linear, text-shadow 1.2s linear;
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 
   &.is-unavailable { color: var(--bad); text-shadow: none; font-size: 2.25rem; }
@@ -111,24 +81,19 @@
 
 .forge-sub {
   margin: 0.75rem 0 0;
-  color: var(--ash); font-size: 0.875rem;
+  color: var(--ash); font-size: var(--fs-sm);
   .num { color: var(--text); margin-left: 0.375rem; }
 }
 
 .heat-strip {
   display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem;
   margin: 1.75rem 0 0; padding: 0; list-style: none;
-  font-size: 0.875rem; color: var(--ash);
+  font-size: var(--fs-sm); color: var(--ash);
 
   li { display: inline-flex; align-items: center; gap: 0.5rem; }
   .num { color: var(--heat); }
 }
-.heat-dot {
-  width: 0.5rem; height: 0.5rem; border-radius: 50%;
-  background: var(--heat);
-}
 
-// Secondary readouts: one column, ranked below the hero
 .readouts { margin: 0; display: flex; flex-direction: column; }
 
 .readout {
@@ -136,13 +101,13 @@
   border-bottom: 1px solid var(--scale);
   &:last-child { border-bottom: none; }
 
-  dt { font-size: 0.875rem; color: var(--ash); margin-bottom: 0.25rem; }
+  dt { font-size: var(--fs-sm); color: var(--ash); margin-bottom: 0.25rem; }
   dd { margin: 0; }
 }
 .readout-value {
-  font-size: 1.5rem; line-height: 1.2;
-  small { font-size: 0.875rem; color: var(--ash); margin-left: 0.125rem; }
-  &.is-unavailable { color: var(--bad); font-size: 1.125rem; }
+  font-size: var(--fs-xl); line-height: 1.2;
+  small { font-size: var(--fs-sm); color: var(--ash); margin-left: 0.125rem; }
+  &.is-unavailable { color: var(--bad); font-size: var(--fs-lg); }
 }
 .readout-note {
   margin-top: 0.25rem !important;
@@ -151,66 +116,16 @@
   &.is-bad { color: var(--bad); }
 }
 
-// ---------- Panels ----------
-.panel {
-  min-width: 0;
-  padding: 1.25rem 1.5rem 1.5rem;
-  border: 1px solid var(--scale);
-  border-radius: 6px;
-  background: var(--panel);
-}
-
-.panel-title {
-  display: flex; align-items: center; gap: 0.75rem;
-  margin: 0 0 1.25rem;
-  font-size: 1.125rem; font-weight: 400; color: var(--text);
-}
-
-.panel-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.chart-panel { margin-bottom: 1.5rem; }
+// ---------- Chart and gauges ----------
 .chart-content ::ng-deep .p-chart { background: transparent !important; }
 
-.tag {
-  padding: 0.125rem 0.5rem;
-  border: 1px solid var(--scale-strong);
-  border-radius: 3px;
-  font-size: 0.75rem; color: var(--ash);
-  &.is-warn { border-color: rgba(242, 196, 109, 0.45); color: var(--warn); }
-}
-
-// ---------- Gauges ----------
 .gauge-row { margin-bottom: 1.125rem; &:last-child { margin-bottom: 0; } }
 
 .gauge-head {
   display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
   margin-bottom: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--fs-sm);
   span:first-child { color: var(--ash); }
-}
-
-.gauge {
-  position: relative;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--scale);
-
-  > span {
-    display: block; height: 100%;
-    border-radius: inherit;
-    background: var(--steel);
-    transition: width 0.6s ease-out;
-  }
-
-  &.is-heat > span {
-    background: var(--heat);
-    transition: width 0.6s ease-out, background-color 1.2s linear;
-  }
 }
 .is-heat-row .gauge-head .num { color: var(--heat); }
 
@@ -226,26 +141,7 @@
   font-size: 0.8125rem; color: var(--bad);
 }
 
-// ---------- Facts (pool, coinbase) ----------
-.facts {
-  margin: 0;
-
-  > div {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
-    padding: 0.625rem 0;
-    border-bottom: 1px solid var(--scale);
-    &:first-child { padding-top: 0; }
-    &:last-child { border-bottom: none; }
-
-    &.is-stacked { flex-direction: column; align-items: flex-start; gap: 0.375rem; }
-  }
-
-  dt { font-size: 0.875rem; color: var(--ash); flex-shrink: 0; }
-  dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
-  .is-stacked dd { text-align: left; color: var(--ash); }
-  a { color: var(--steel); text-decoration: none; &:hover, &:focus-visible { text-decoration: underline; } }
-}
-
+// ---------- Coinbase payouts ----------
 .payouts {
   margin: 0.75rem 0 0; padding: 0.75rem 0 0; list-style: none;
   border-top: 1px solid var(--scale);
@@ -258,8 +154,6 @@
   }
 }
 
-a:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; border-radius: 2px; }
-
 // ---------- Responsive ----------
 @media (max-width: 900px) {
   .forge { grid-template-columns: 1fr; }
@@ -269,17 +163,12 @@ a:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; border-r
 }
 
 @media (max-width: 600px) {
-  :host { padding-top: 0.75rem; }
   .forge-main { padding: 1.5rem 1rem 1.25rem; }
   .readouts { flex-direction: column; }
   .readout { padding: 0.875rem 1rem; border-right: none; border-bottom: 1px solid var(--scale); &:last-child { border-bottom: none; } }
-  .panel { padding: 1rem; }
-  .panel-row { gap: 1rem; margin-bottom: 1rem; }
-  .chart-panel, .forge { margin-bottom: 1rem; }
-  .facts > div { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
-  .facts dd { text-align: left; }
+  .forge { margin-bottom: 1rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .forge-main::after, .forge-value, .gauge > span { transition: none !important; }
+  .forge-main::after, .forge-value { transition: none !important; }
 }

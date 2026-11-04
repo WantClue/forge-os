@@ -1,11 +1,30 @@
-$primaryColor: #06b6d4 !default;
-$primaryLightColor: scale-color($primaryColor, $lightness: 30%) !default;
-$primaryDarkColor: scale-color($primaryColor, $lightness: -10%) !default;
-$primaryDarkerColor: scale-color($primaryColor, $lightness: -20%) !default;
-$primaryTextColor: white !default;
+// Legacy Vela theme, retuned to the ForgeOS palette (see src/_forge.scss).
+// These rules sit in the `forge-os` CSS layer, which outranks PrimeNG's own
+// layer, so they must agree with the Aura preset in app/theme/forge-preset.ts.
+$primaryColor: #8fa6bf !default;      // steel
+$primaryLightColor: #adbfd0 !default;
+$primaryDarkColor: #7690ad !default;
+$primaryDarkerColor: #5f7896 !default;
+$primaryTextColor: #070d17 !default;
 
-$highlightBg: rgba(100, 181, 246, .16) !default;
-$highlightTextColor: rgba(255,255,255,.87) !default;
-$highlightFocusBg: rgba($primaryColor, .24) !default;
+$highlightBg: rgba(143, 166, 191, .16) !default;
+$highlightTextColor: #e6edf5 !default;
+$highlightFocusBg: rgba(143, 166, 191, .24) !default;
+
+$shade000: #e6edf5 !default; // text
+$shade100: #8a9bb0 !default; // secondary text
+$shade500: #3f4e61 !default;
+$shade600: #2a3a4c !default; // input border, divider
+$shade700: #17222f !default;
+$shade800: #0b1219 !default; // panels
+$shade900: #070d17 !default; // ground
+
+$borderRadius: 4px !default;
+$errorColor: #f2785c !default;
+$focusOutlineColor: rgba(143, 166, 191, .55) !default;
+$focusShadow: 0 0 0 2px rgba(143, 166, 191, .35) !default;
+$inputBg: transparent !default;
+$inputHoverBorderColor: #56677d !default;
+$messageBorderWidth: 1px !default;
 
 @import '../_variables';

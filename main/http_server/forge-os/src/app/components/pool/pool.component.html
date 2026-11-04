@@ -1,11 +1,9 @@
-<div class="grid">
-    <div class="col-12">
-        <div class="card">
-            <h5>Pool Configuration</h5>
+<section class="panel">
+            <p class="panel-intro">The primary pool is used first. In fallback mode the secondary pool takes over when the primary can't be reached; in dual mode both pools mine at the split you set.</p>
             <form [formGroup]="form" *ngIf="form != null">
                 <div class="field grid p-fluid">
-                    <label htmlFor="poolMode" class="col-12 mb-2 md:col-2 md:mb-0">Pool Mode:</label>
-                    <div class="col-12 md:col-10">
+                    <label htmlFor="poolMode" class="col-12 mb-2 md:col-3 md:mb-0">Pool mode</label>
+                    <div class="col-12 md:col-9">
                         <p-dropdown id="poolMode" [options]="poolModes" formControlName="poolMode"
                                     optionLabel="label" optionValue="value" placeholder="Select Pool Mode">
                         </p-dropdown>
@@ -13,24 +11,24 @@
                 </div>
 
                 <p-message *ngIf="form.errors?.['sv2DualPool']" severity="warn" styleClass="w-full mb-3"
-                    text="Stratum V2 is not supported in Dual Pool mode. Set both pools to Stratum V1 or use Fallback mode.">
+                    text="Stratum V2 does not work in dual mode. Set both pools to Stratum V1, or switch to fallback mode.">
                 </p-message>
 
                 <div class="field grid p-fluid" *ngIf="form.get('poolMode')?.value === 1">
-                    <label htmlFor="poolBalance" class="col-12 mb-2 md:col-2 md:mb-0">Pool Balance:</label>
-                    <div class="col-12 md:col-10">
+                    <label htmlFor="poolBalance" class="col-12 mb-2 md:col-3 md:mb-0">Split</label>
+                    <div class="col-12 md:col-9">
                         <input pInputText id="poolBalance" formControlName="poolBalance" type="number" min="0" max="100" />
                         <div>
-                            <small>Primary {{ form.get('poolBalance')?.value }}% / Secondary {{ 100 - form.get('poolBalance')?.value }}%</small>
+                            <small>Primary pool gets {{ form.get('poolBalance')?.value }}% of the hashrate, secondary pool {{ 100 - form.get('poolBalance')?.value }}%.</small>
                         </div>
                     </div>
                 </div>
 
                 <p-tabView>
-                    <p-tabPanel header="Main Pool" leftIcon="pi pi-server">
+                    <p-tabPanel header="Primary pool">
                         <div class="field grid p-fluid">
-                            <label htmlFor="stratumProtocol" class="col-12 mb-2 md:col-2 md:mb-0">Protocol:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="stratumProtocol" class="col-12 mb-2 md:col-3 md:mb-0">Protocol</label>
+                            <div class="col-12 md:col-9">
                                 <p-dropdown id="stratumProtocol" [options]="protocolOptions" formControlName="stratumProtocol"
                                             optionLabel="label" optionValue="value" optionDisabled="disabled"
                                             placeholder="Select Protocol">
@@ -41,59 +39,59 @@
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="stratumURL" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Host:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="stratumURL" class="col-12 mb-2 md:col-3 md:mb-0">Host</label>
+                            <div class="col-12 md:col-9">
                                 <input pInputText id="stratumURL" type="text" formControlName="stratumURL" (change)="onUrlChange('stratum')" />
                                 <div>
-                                    <small>You may paste a full URL; protocol and port will be split automatically.</small>
+                                    <small>You can paste a full URL. The protocol and port are filled in for you.</small>
                                 </div>
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="stratumPort" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Port:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="stratumPort" class="col-12 mb-2 md:col-3 md:mb-0">Port</label>
+                            <div class="col-12 md:col-9">
                                 <input pInputText id="stratumPort" formControlName="stratumPort" type="number" />
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="stratumUser" class="col-12 mb-2 md:col-2 md:mb-0">Stratum User:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="stratumUser" class="col-12 mb-2 md:col-3 md:mb-0">User</label>
+                            <div class="col-12 md:col-9">
                                 <input pInputText id="stratumUser" formControlName="stratumUser" type="text" />
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="stratumPassword" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Password:</label>
-                            <div class="col-12 md:col-10 p-input-icon-right">
+                            <label htmlFor="stratumPassword" class="col-12 mb-2 md:col-3 md:mb-0">Password</label>
+                            <div class="col-12 md:col-9 p-input-icon-right">
                                 <i *ngIf="form.get('stratumPassword')?.dirty" class="pi"
                                    [ngClass]="{'pi-eye': !showStratumPassword, 'pi-eye-slash': showStratumPassword}"
                                    (click)="toggleStratumPasswordVisibility()" style="cursor: pointer;"></i>
                                 <input pInputText id="stratumPassword" formControlName="stratumPassword"
                                        [type]="showStratumPassword ? 'text' : 'password'"
-                                       placeholder="Enter stratum password" />
+                                       placeholder="Pool password" />
                             </div>
                         </div>
                         <ng-container *ngIf="form.get('stratumProtocol')?.value !== 1">
                         <div class="field grid p-fluid">
-                            <label htmlFor="stratumTLS" class="col-12 mb-2 md:col-2 md:mb-0">TLS:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="stratumTLS" class="col-12 mb-2 md:col-3 md:mb-0">TLS</label>
+                            <div class="col-12 md:col-9">
                                 <p-dropdown id="stratumTLS" [options]="tlsModes" formControlName="stratumTLS"
                                             optionLabel="label" optionValue="value" placeholder="Select TLS Mode">
                                 </p-dropdown>
                             </div>
                         </div>
                         <div class="field grid p-fluid" *ngIf="form.get('stratumTLS')?.value === 2">
-                            <label htmlFor="stratumCert" class="col-12 mb-2 md:col-2 md:mb-0">TLS Certificate:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="stratumCert" class="col-12 mb-2 md:col-3 md:mb-0">TLS certificate</label>
+                            <div class="col-12 md:col-9">
                                 <textarea pTextarea id="stratumCert" formControlName="stratumCert" rows="5"
-                                          style="width: 100%; font-family: monospace; font-size: 12px;"
+                                         
                                           placeholder="Paste PEM certificate here"></textarea>
                             </div>
                         </div>
                         </ng-container>
                         <ng-container *ngIf="form.get('stratumProtocol')?.value === 1">
                             <div class="field grid p-fluid">
-                                <label htmlFor="stratumV2ChannelType" class="col-12 mb-2 md:col-2 md:mb-0">Channel Type:</label>
-                                <div class="col-12 md:col-10">
+                                <label htmlFor="stratumV2ChannelType" class="col-12 mb-2 md:col-3 md:mb-0">Channel type</label>
+                                <div class="col-12 md:col-9">
                                     <p-dropdown id="stratumV2ChannelType" [options]="sv2ChannelTypes" formControlName="stratumV2ChannelType"
                                                 optionLabel="label" optionValue="value" placeholder="Select Channel Type">
                                     </p-dropdown>
@@ -104,8 +102,8 @@
                                 </div>
                             </div>
                             <div class="field grid p-fluid">
-                                <label htmlFor="stratumV2AuthorityPubkey" class="col-12 mb-2 md:col-2 md:mb-0">Authority Pubkey:</label>
-                                <div class="col-12 md:col-10">
+                                <label htmlFor="stratumV2AuthorityPubkey" class="col-12 mb-2 md:col-3 md:mb-0">Authority public key</label>
+                                <div class="col-12 md:col-9">
                                     <input pInputText id="stratumV2AuthorityPubkey" formControlName="stratumV2AuthorityPubkey" type="text"
                                            placeholder="Pool's SV2 authority public key (optional)" />
                                     <div>
@@ -115,7 +113,7 @@
                                 </div>
                             </div>
                             <div class="field grid">
-                                <div class="col-12 md:col-10 md:col-offset-2">
+                                <div class="col-12 md:col-9 md:col-offset-3">
                                     <div class="field-checkbox mb-0">
                                         <p-checkbox formControlName="stratumV2RequireAuth" inputId="stratumV2RequireAuth" [binary]="true"></p-checkbox>
                                         <label for="stratumV2RequireAuth">Require authentication (refuse to connect if the pool's identity can't be verified)</label>
@@ -126,10 +124,10 @@
                         </ng-container>
                     </p-tabPanel>
 
-                    <p-tabPanel header="Secondary / Fallback Pool" leftIcon="pi pi-shield">
+                    <p-tabPanel header="Secondary pool">
                         <div class="field grid p-fluid">
-                            <label htmlFor="fallbackStratumProtocol" class="col-12 mb-2 md:col-2 md:mb-0">Protocol:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="fallbackStratumProtocol" class="col-12 mb-2 md:col-3 md:mb-0">Protocol</label>
+                            <div class="col-12 md:col-9">
                                 <p-dropdown id="fallbackStratumProtocol" [options]="protocolOptions" formControlName="fallbackStratumProtocol"
                                             optionLabel="label" optionValue="value" optionDisabled="disabled"
                                             placeholder="Select Protocol">
@@ -140,59 +138,59 @@
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="fallbackStratumURL" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Host:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="fallbackStratumURL" class="col-12 mb-2 md:col-3 md:mb-0">Host</label>
+                            <div class="col-12 md:col-9">
                                 <input pInputText id="fallbackStratumURL" type="text" formControlName="fallbackStratumURL" (change)="onUrlChange('fallbackStratum')" />
                                 <div>
-                                    <small>You may paste a full URL; protocol and port will be split automatically.</small>
+                                    <small>You can paste a full URL. The protocol and port are filled in for you.</small>
                                 </div>
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="fallbackStratumPort" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Port:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="fallbackStratumPort" class="col-12 mb-2 md:col-3 md:mb-0">Port</label>
+                            <div class="col-12 md:col-9">
                                 <input pInputText id="fallbackStratumPort" formControlName="fallbackStratumPort" type="number" />
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="fallbackStratumUser" class="col-12 mb-2 md:col-2 md:mb-0">Stratum User:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="fallbackStratumUser" class="col-12 mb-2 md:col-3 md:mb-0">User</label>
+                            <div class="col-12 md:col-9">
                                 <input pInputText id="fallbackStratumUser" formControlName="fallbackStratumUser" type="text" />
                             </div>
                         </div>
                         <div class="field grid p-fluid">
-                            <label htmlFor="fallbackStratumPassword" class="col-12 mb-2 md:col-2 md:mb-0">Stratum Password:</label>
-                            <div class="col-12 md:col-10 p-input-icon-right">
+                            <label htmlFor="fallbackStratumPassword" class="col-12 mb-2 md:col-3 md:mb-0">Password</label>
+                            <div class="col-12 md:col-9 p-input-icon-right">
                                 <i *ngIf="form.get('fallbackStratumPassword')?.dirty" class="pi"
                                    [ngClass]="{'pi-eye': !showFallbackStratumPassword, 'pi-eye-slash': showFallbackStratumPassword}"
                                    (click)="toggleFallbackStratumPasswordVisibility()" style="cursor: pointer;"></i>
                                 <input pInputText id="fallbackStratumPassword" formControlName="fallbackStratumPassword"
                                        [type]="showFallbackStratumPassword ? 'text' : 'password'"
-                                       placeholder="Enter fallback stratum password" />
+                                       placeholder="Pool password" />
                             </div>
                         </div>
                         <ng-container *ngIf="form.get('fallbackStratumProtocol')?.value !== 1">
                         <div class="field grid p-fluid">
-                            <label htmlFor="fallbackStratumTLS" class="col-12 mb-2 md:col-2 md:mb-0">TLS:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="fallbackStratumTLS" class="col-12 mb-2 md:col-3 md:mb-0">TLS</label>
+                            <div class="col-12 md:col-9">
                                 <p-dropdown id="fallbackStratumTLS" [options]="tlsModes" formControlName="fallbackStratumTLS"
                                             optionLabel="label" optionValue="value" placeholder="Select TLS Mode">
                                 </p-dropdown>
                             </div>
                         </div>
                         <div class="field grid p-fluid" *ngIf="form.get('fallbackStratumTLS')?.value === 2">
-                            <label htmlFor="fallbackStratumCert" class="col-12 mb-2 md:col-2 md:mb-0">TLS Certificate:</label>
-                            <div class="col-12 md:col-10">
+                            <label htmlFor="fallbackStratumCert" class="col-12 mb-2 md:col-3 md:mb-0">TLS certificate</label>
+                            <div class="col-12 md:col-9">
                                 <textarea pTextarea id="fallbackStratumCert" formControlName="fallbackStratumCert" rows="5"
-                                          style="width: 100%; font-family: monospace; font-size: 12px;"
+                                         
                                           placeholder="Paste PEM certificate here"></textarea>
                             </div>
                         </div>
                         </ng-container>
                         <ng-container *ngIf="form.get('fallbackStratumProtocol')?.value === 1">
                             <div class="field grid p-fluid">
-                                <label htmlFor="fallbackStratumV2ChannelType" class="col-12 mb-2 md:col-2 md:mb-0">Channel Type:</label>
-                                <div class="col-12 md:col-10">
+                                <label htmlFor="fallbackStratumV2ChannelType" class="col-12 mb-2 md:col-3 md:mb-0">Channel type</label>
+                                <div class="col-12 md:col-9">
                                     <p-dropdown id="fallbackStratumV2ChannelType" [options]="sv2ChannelTypes" formControlName="fallbackStratumV2ChannelType"
                                                 optionLabel="label" optionValue="value" placeholder="Select Channel Type">
                                     </p-dropdown>
@@ -203,8 +201,8 @@
                                 </div>
                             </div>
                             <div class="field grid p-fluid">
-                                <label htmlFor="fallbackStratumV2AuthorityPubkey" class="col-12 mb-2 md:col-2 md:mb-0">Authority Pubkey:</label>
-                                <div class="col-12 md:col-10">
+                                <label htmlFor="fallbackStratumV2AuthorityPubkey" class="col-12 mb-2 md:col-3 md:mb-0">Authority public key</label>
+                                <div class="col-12 md:col-9">
                                     <input pInputText id="fallbackStratumV2AuthorityPubkey" formControlName="fallbackStratumV2AuthorityPubkey" type="text"
                                            placeholder="Pool's SV2 authority public key (optional)" />
                                     <div>
@@ -214,7 +212,7 @@
                                 </div>
                             </div>
                             <div class="field grid">
-                                <div class="col-12 md:col-10 md:col-offset-2">
+                                <div class="col-12 md:col-9 md:col-offset-3">
                                     <div class="field-checkbox mb-0">
                                         <p-checkbox formControlName="fallbackStratumV2RequireAuth" inputId="fallbackStratumV2RequireAuth" [binary]="true"></p-checkbox>
                                         <label for="fallbackStratumV2RequireAuth">Require authentication (refuse to connect if the pool's identity can't be verified)</label>
@@ -226,16 +224,10 @@
                     </p-tabPanel>
                 </p-tabView>
 
-                <div class="mt-2">
-                    <button pButton [disabled]="!form.dirty || form.invalid" (click)="updateSystem()"
-                        class="btn btn-primary mr-2">Save</button>
-                    <b style="line-height: 34px;">You must restart this device after saving for changes to take effect.</b>
-                </div>
-
-                <div class="mt-2">
-                    <button pButton [disabled]="!savedChanges" (click)="restart()">Restart</button>
+                <div class="form-actions">
+                    <button pButton type="button" [disabled]="!form.dirty || form.invalid" (click)="updateSystem()">Save</button>
+                    <span class="form-actions-note">Pool changes apply after a restart.</span>
+                    <button pButton type="button" class="p-button-secondary form-actions-end" [disabled]="!savedChanges" (click)="restart()">Restart</button>
                 </div>
             </form>
-        </div>
-    </div>
-</div>
+</section>

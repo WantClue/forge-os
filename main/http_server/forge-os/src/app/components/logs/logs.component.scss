@@ -1,313 +1,52 @@
-// CSS Custom Properties - Matching design system
-:host {
-  --card-bg: rgba(30, 41, 59, 0.5);
-  --card-border: rgba(51, 65, 85, 0.3);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --success-color: #10b981;
-  --error-color: #ef4444;
-  --warning-color: #f59e0b;
-  --primary-gradient: linear-gradient(135deg, #6366f1, #06b6d4);
-  --secondary-gradient: linear-gradient(135deg, #64748b, #475569);
+// System info and live log. Panels and facts come from src/_forge.scss.
+:host { display: block; }
 
-  display: block;
-  padding-top: 2rem;
+.logs-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+
+  .panel-title { margin: 0; }
 }
 
-// Base card styles - Matching home component
-%base-card {
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid var(--card-border);
-  border-radius: 1rem;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
+.log-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
-}
+.logs-empty { margin: 0; color: var(--ash); font-size: var(--fs-sm); }
 
-// Override PrimeNG card styles
-::ng-deep .p-card {
-  @extend %base-card;
-  margin-bottom: 1.5rem;
-
-  .p-card-header {
-    background: transparent;
-    border-bottom: 1px solid var(--card-border);
-    padding: 1rem 1.5rem;
-  }
-
-  .p-card-content, .p-card-body {
-    background: transparent;
-    color: var(--text-primary);
-    padding: 1.5rem;
-  }
-
-  h2, h5 {
-    color: var(--text-primary);
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  h5 {
-    font-size: 1.25rem;
-
-    &::before {
-      content: '📋';
-      font-size: 1.5rem;
-    }
-  }
-
-  h2 {
-    font-size: 1.5rem;
-
-    &::before {
-      content: '📜';
-      font-size: 1.8rem;
-    }
-  }
-}
-
-// System Overview Table
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  background: rgba(51, 65, 85, 0.1);
-  border-radius: 0.5rem;
-  overflow: hidden;
-
-  tr {
-    &:nth-child(even) {
-      background: rgba(51, 65, 85, 0.05);
-    }
-
-    &:hover {
-      background: rgba(99, 102, 241, 0.1);
-      transform: scale(1.01);
-      transition: all 0.2s ease;
-    }
-  }
-
-  td {
-    padding: 0.75rem 1rem;
-    color: var(--text-primary);
-    border-bottom: 1px solid var(--card-border);
-
-    &:first-child {
-      font-weight: 600;
-      color: var(--text-secondary);
-      width: 40%;
-      text-transform: uppercase;
-      font-size: 0.875rem;
-      letter-spacing: 0.05em;
-    }
-
-    &:last-child {
-      font-family: 'Courier New', monospace;
-      font-weight: 500;
-    }
-  }
-
-  tr:last-child td {
-    border-bottom: none;
-  }
-}
-
-// Logs Container
 #logs {
   height: 500px;
-  font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--card-border);
-  border-radius: 0.5rem;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 1rem;
-  margin-top: 1rem;
-
-
-  // Custom scrollbar
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: rgba(30, 41, 59, 0.3);
-    border-radius: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--primary-gradient);
-    border-radius: 4px;
-
-    &:hover {
-      background: linear-gradient(135deg, #5855f1, #059baa);
-    }
-  }
+  padding: 0.75rem 0;
+  border: 1px solid var(--scale);
+  border-radius: var(--radius);
+  background: var(--quench);
 
   > div {
     max-width: 100%;
+    padding: 0.125rem 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+    font-size: 0.8125rem;
+    line-height: 1.5;
     line-break: anywhere;
-    font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    padding: 0.25rem 0;
-    border-left: 3px solid transparent;
-    padding-left: 0.75rem;
-    transition: all 0.2s ease;
 
-    &:hover {
-      background: rgba(99, 102, 241, 0.05);
-      border-left-color: #6366f1;
-    }
+    &:hover { background: var(--anvil); }
   }
 }
 
-// Logs Header Layout
-.logs-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-  gap: 1rem;
+// ESP-IDF colours: green is ordinary info, so it stays quiet; yellow and red
+// are warnings and errors and keep the status colours.
+.ansi-white   { color: var(--text); }
+.ansi-green   { color: var(--ash); }
+.ansi-yellow  { color: var(--warn); }
+.ansi-red     { color: var(--bad); }
+.ansi-blue    { color: var(--steel); }
+.ansi-cyan    { color: var(--steel-bright); }
+.ansi-magenta { color: #c3a6d9; }
 
-  h2 {
-    margin-bottom: 0;
-    flex: 1;
-    min-width: 200px;
-  }
-}
-
-// Log Control Buttons
-.log-controls {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-
-  .control-button {
-    min-width: auto !important;
-    padding: 0.5rem 1rem !important;
-    font-size: 0.875rem !important;
-  }
-}
-
-// Button Styling
-::ng-deep .p-button {
-  border-radius: 0.5rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  border: none;
-
-  // Secondary buttons (logs controls)
-  &.p-button-secondary,
-  &.btn-secondary {
-    background: var(--secondary-gradient) !important;
-    color: white !important;
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, #475569, #334155) !important;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  // Primary buttons
-  &:not(.p-button-secondary):not(.btn-secondary) {
-    background: var(--primary-gradient);
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, #5855f1, #059baa);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  &:disabled {
-    background: rgba(30, 41, 59, 0.5) !important;
-    color: var(--text-muted) !important;
-    cursor: not-allowed !important;
-    transform: none !important;
-  }
-}
-
-// Enhanced ANSI colors for better readability
-.ansi-red { color: #f87171; }
-.ansi-green { color: #4ade80; }
-.ansi-yellow { color: #fbbf24; }
-.ansi-blue { color: #60a5fa; }
-.ansi-magenta { color: #c084fc; }
-.ansi-cyan { color: #22d3ee; }
-.ansi-white { color: var(--text-primary); }
-
-// System status indicators
-.status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-
-  &::before {
-    content: '●';
-    font-size: 0.75rem;
-  }
-
-  &.online::before {
-    color: var(--success-color);
-  }
-
-  &.offline::before {
-    color: var(--error-color);
-  }
-
-  &.warning::before {
-    color: var(--warning-color);
-  }
-}
-
-// Responsive Design
-@media (max-width: 768px) {
-  .log-controls {
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-left: 0;
-    margin-top: 1rem;
-
-    .p-button {
-      width: 100%;
-    }
-  }
-
-  #logs {
-    height: 400px;
-    font-size: 0.8rem;
-  }
-
-  table {
-    font-size: 0.875rem;
-
-    td {
-      padding: 0.5rem;
-
-      &:first-child {
-        width: 35%;
-        font-size: 0.8rem;
-      }
-    }
-  }
+@media (max-width: 600px) {
+  #logs { height: 60vh; }
 }

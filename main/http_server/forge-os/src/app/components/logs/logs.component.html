@@ -1,73 +1,46 @@
-<div class="grid">
-    <div class="col-12 lg:col-6">
-        <div class="card">
-            <h5>Overview</h5>
-            <table *ngIf="info$ | async as info">
-                <tr>
-                    <td>Model:</td>
-                    <td>{{info.ASICModel}}</td>
-                </tr>
-                <tr>
-                    <td>Uptime:</td>
-                    <td>{{info.uptimeSeconds | dateAgo}}</td>
-                </tr>
-                <tr>
-                    <td>Wi-Fi Status:</td>
-                    <td>{{info.wifiStatus}}</td>
-                </tr>
-                <tr>
-                    <td>MAC Address:</td>
-                    <td>{{info.macAddr}}</td>
-                </tr>
-                <tr>
-                    <td>Free Heap Memory:</td>
-                    <td>{{info.freeHeap}} bytes</td>
-                </tr>
-                <tr>
-                    <td>Internal RAM Free:</td>
-                    <td>{{info.freeHeapInternal}} bytes</td>
-                </tr>
-                <tr>
-                    <td>PSRAM Free:</td>
-                    <td>{{info.freeHeapSpiram}} bytes</td>
-                </tr>
-                <tr>
-                    <td>PSRAM Available:</td>
-                    <td>{{info.isPSRAMAvailable ? 'Yes' : 'No'}}</td>
-                </tr>
-                <tr>
-                    <td>Version:</td>
-                    <td>{{info.version}}</td>
-                </tr>
-                <tr>
-                    <td>ESP-IDF Version:</td>
-                    <td>{{info.idfVersion}}</td>
-                </tr>
-            </table>
-        </div>
+<div class="panel-row">
+    <section class="panel" *ngIf="info$ | async as info">
+        <h2 class="panel-title">System</h2>
+        <dl class="facts">
+            <div><dt>Model</dt><dd>{{info.ASICModel}}</dd></div>
+            <div><dt>Firmware</dt><dd class="num">{{info.version}}</dd></div>
+            <div><dt>ESP-IDF</dt><dd class="num">{{info.idfVersion}}</dd></div>
+            <div><dt>Running for</dt><dd>{{info.uptimeSeconds | dateAgo}}</dd></div>
+            <div><dt>Wi-Fi</dt><dd>{{info.wifiStatus}}</dd></div>
+            <div><dt>MAC address</dt><dd class="code">{{info.macAddr}}</dd></div>
+        </dl>
+    </section>
 
-    </div>
-
-    <div class="col-12">
-        <div class="card">
-            <div class="logs-header">
-                <h2>Realtime Logs</h2>
-                <div class="log-controls">
-                    <button pButton (click)="toggleLogs()" class="btn-secondary control-button">
-                        {{showLogs ? 'Hide': 'Show'}} Logs
-                    </button>
-                    <button pButton class="btn-secondary control-button" (click)="stopScroll = !stopScroll" *ngIf="showLogs">
-                        {{stopScroll ? 'Start' : 'Stop'}} Scrolling
-                    </button>
-                    <button pButton icon="pi pi-download" class="btn-secondary control-button" (click)="downloadLogs()" *ngIf="hasDownloadableLogs">
-                        Download Logs
-                    </button>
-                </div>
-            </div>
-
-            <div *ngIf="showLogs" id="logs" #scrollContainer>
-                <div *ngFor="let log of logs" [ngClass]="log.className">₿ {{log.text | ANSI}}</div>
-            </div>
-        </div>
-    </div>
+    <section class="panel" *ngIf="info$ | async as info">
+        <h2 class="panel-title">Memory</h2>
+        <dl class="facts">
+            <div><dt>Free heap</dt><dd class="num">{{info.freeHeap | number: '1.0-0'}} bytes</dd></div>
+            <div><dt>Free internal RAM</dt><dd class="num">{{info.freeHeapInternal | number: '1.0-0'}} bytes</dd></div>
+            <div><dt>Free PSRAM</dt><dd class="num">{{info.freeHeapSpiram | number: '1.0-0'}} bytes</dd></div>
+            <div><dt>PSRAM installed</dt><dd>{{info.isPSRAMAvailable ? 'Yes' : 'No'}}</dd></div>
+        </dl>
+    </section>
 </div>
+
+<section class="panel">
+    <div class="logs-header">
+        <h2 class="panel-title">Live log</h2>
+        <div class="log-controls">
+            <button pButton type="button" (click)="toggleLogs()" [class.p-button-secondary]="showLogs">
+                {{showLogs ? 'Hide log' : 'Show log'}}
+            </button>
+            <button pButton type="button" class="p-button-secondary" (click)="stopScroll = !stopScroll" *ngIf="showLogs">
+                {{stopScroll ? 'Resume scrolling' : 'Pause scrolling'}}
+            </button>
+            <button pButton type="button" icon="pi pi-download" class="p-button-secondary" (click)="downloadLogs()" *ngIf="hasDownloadableLogs">
+                Download log
+            </button>
+        </div>
+    </div>
+
+    <p class="logs-empty" *ngIf="!showLogs">The log streams from the miner while it is shown.</p>
+
+    <div *ngIf="showLogs" id="logs" #scrollContainer role="log" aria-live="off">
+        <div *ngFor="let log of logs" [ngClass]="log.className">₿ {{log.text | ANSI}}</div>
+    </div>
+</section>

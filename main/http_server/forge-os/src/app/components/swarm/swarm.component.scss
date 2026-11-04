@@ -1,86 +1,111 @@
-:host {
-  --card-bg: rgba(30, 41, 59, 0.5);
-  --card-border: rgba(51, 65, 85, 0.3);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --success-color: #10b981;
-  --warning-color: #f59e0b;
-  --error-color: #ef4444;
-  --primary-gradient: linear-gradient(135deg, #6366f1, #06b6d4);
-  --secondary-gradient: linear-gradient(135deg, #64748b, #475569);
-  display: block;
-  padding-top: 2rem;
+// Swarm: other miners on the network. Shared primitives come from src/_forge.scss.
+:host { display: block; }
+
+.readout-strip small { font-size: var(--fs-sm); color: var(--ash); }
+
+.swarm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1rem;
 }
 
-%base-card {
-  background: rgba(30, 41, 59, 0.95); border: 1px solid var(--card-border); border-radius: 1rem; padding: 1.5rem;
+.swarm-filter {
+  flex: 0 1 20rem;
+  min-width: 0;
+  input { width: 100%; padding-right: 2.25rem; }
+}
+.swarm-filter-clear {
+  position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
+  padding: 0.25rem;
+  background: none; border: none;
+  color: var(--ash); cursor: pointer;
+  &:hover { color: var(--text); }
 }
 
-::ng-deep .p-button {
-  border-radius: 0.5rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  border: none;
-
-  &.p-button-secondary,
-  &.btn-secondary {
-    background: var(--secondary-gradient) !important;
-    color: white !important;
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, #475569, #334155) !important;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  &:not(.p-button-secondary):not(.btn-secondary) {
-    background: var(--primary-gradient) !important;
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, #5855f1, #059baa) !important;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  &:disabled {
-    background: rgba(30, 41, 59, 0.5) !important;
-    color: var(--text-muted) !important;
-    cursor: not-allowed !important;
-    transform: none !important;
-  }
+.swarm-legend {
+  display: flex; flex-wrap: wrap; gap: 0.25rem 1rem;
+  color: var(--ash); font-size: var(--fs-sm);
+  > span { display: inline-flex; align-items: center; }
 }
 
-::ng-deep .p-input-icon-left {
-  > .pi {
-    left: 1rem;
-  }
-  
-  > input {
-    padding-left: 2.5rem;
-  }
+// Device family colour (set by each miner's firmware)
+.family-dot {
+  display: inline-block; flex-shrink: 0;
+  width: 0.5rem; height: 0.5rem;
+  margin-right: 0.5rem;
+  border-radius: 2px;
 }
 
-.button-text {
-  span:last-child {
-    margin-left: 0.75rem;
-  }
+.swarm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
+
+.miner {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  // Heat edge: a thin line in the miner's hottest-part colour
+  box-shadow: inset 0 -2px 0 var(--heat);
+}
+
+.miner-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;
+  margin-bottom: 0.875rem;
+}
+.miner-id { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }
+.miner-name {
+  display: inline-flex; align-items: center;
+  color: var(--text); font-size: var(--fs-lg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  &:hover { color: var(--steel-bright); }
+}
+.miner-meta { color: var(--ash-dim); font-size: 0.8125rem; }
+.miner-hashrate { font-size: var(--fs-xl); line-height: 1.1; }
+
+.miner-tag { align-self: flex-start; margin-bottom: 0.875rem; }
+
+.miner-facts {
+  flex: 1;
+  font-size: var(--fs-sm);
+  > div { padding: 0.4375rem 0; }
+}
+.miner-heat {
+  display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.25rem 0.5rem;
+  > .num:first-of-type { color: var(--heat); }
+}
+
+.miner-actions {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  margin-top: 1rem; padding-top: 1rem;
+  border-top: 1px solid var(--scale);
+}
+.miner-remove { margin-left: auto; }
+
+.swarm-empty { color: var(--ash); padding: 1rem 0 2rem; }
+.swarm-intro p { margin: 0; color: var(--ash); max-width: 56ch; }
+
+// Controls
+.swarm-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+}
+.swarm-refresh { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+.swarm-countdown { margin-left: 0.5rem; color: var(--ash); }
+.swarm-interval {
+  display: inline-flex; align-items: center; gap: 0.75rem;
+  color: var(--ash); font-size: var(--fs-sm);
+}
+.swarm-slider { display: block; width: 7rem; }
+.swarm-add { margin-left: auto; flex: 0 1 24rem; min-width: 0; }
 
 @media (max-width: 768px) {
-  :host { padding-top: 1rem; }
-}
-
-@media (max-width: 480px) {
-  :host { padding-top: 0.5rem; }
+  .swarm-add { margin-left: 0; flex-basis: 100%; }
+  .swarm-filter { flex-basis: 100%; }
 }

@@ -7,7 +7,6 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ToastrModule } from 'ngx-toastr';
-import Aura from '@primeng/themes/aura';
 import { providePrimeNG } from 'primeng/config';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -30,6 +29,7 @@ import { DiffSuffixPipe } from './pipes/diff-suffix.pipe';
 import { SatsPipe } from './pipes/sats.pipe';
 import { ModalComponent } from './components/modal/modal.component';
 import { PrimeNGModule } from './prime-ng.module';
+import { ForgePreset } from './theme/forge-preset';
 
 const components = [
   AppComponent,
@@ -75,7 +75,7 @@ const components = [
       ripple: false,
       inputStyle: 'outlined',
       theme: {
-        preset: Aura,
+        preset: ForgePreset,
         options: {
           darkModeSelector: '.layout-theme-dark',
           cssLayer: {

@@ -1,197 +1,115 @@
 <ng-template #noValue>--</ng-template>
 
-<div class="card">
-    <h2>Swarm</h2>
+<ng-container *ngIf="swarm.length; else noDevices">
+    <dl class="readout-strip">
+        <div><dt>Miners</dt><dd>{{swarm.length}}</dd></div>
+        <div><dt>Total hashrate</dt><dd>{{totals.hashRate * 1000000000 | hashSuffix}}</dd></div>
+        <div><dt>Total power</dt><dd>{{totals.power | number: '1.1-1'}} <small>W</small></dd></div>
+        <div><dt>Best difficulty</dt><dd>{{totals.bestDiff | diffSuffix}}</dd></div>
+    </dl>
 
-    <ng-container *ngIf="swarm.length; else noDevices">
-        <div class="grid">
-            <div class="col-6 xl:col-3" *ngFor="let metric of [
-                { label: 'Total Devices', value: swarm.length },
-                { label: 'Total Hashrate', value: totals.hashRate * 1000000000 | hashSuffix},
-                { label: 'Total Power', value: (totals.power | number: '1.1-1')  + ' W' },
-                { label: 'Best Diff', value: totals.bestDiff | diffSuffix }
-            ]">
-                <div class="card flex flex-column mb-0">
-                    <span class="text-500 font-medium mb-3">{{metric.label}}</span>
-                    <div class="text-900 font-medium text-2xl">{{metric.value}}</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="mt-2 mb-3 gap-2 sm:gap-3 flex justify-content-end">
-            <div class="flex gap-2 sm:gap-3">
-                <div class="w-full p-input-icon-left relative">
-                    <i class="pi pi-filter"></i>
-                    <input
-                        pInputText
-                        type="text"
-                        class="w-full sm:w-12rem lg:w-14rem pr-5"
-                        autocomplete="off"
-                        placeholder="Filter"
-                        [(ngModel)]="filterText" />
-                    <p-button
-                        icon="pi pi-times text-xs flex align-items-center justify-content-center"
-                        pp-button
-                        pTooltip="Clear"
-                        tooltipPosition="top"
-                        severity="secondary"
-                        styleClass="button-icon-small"
-                        class="absolute right-0 mt-2 mr-2"
-                        *ngIf="filterText"
-                        (click)="filterText = ''" />
-                </div>
-            </div>
-        </div>
-
-        <ng-container *ngIf="filteredSwarm.length; else noFilterResults">
-            <div class="grid">
-                <div class="col-12 sm:col-6 xl:col-4" *ngFor="let axe of filteredSwarm">
-                    <div class="card flex justify-content-between mb-0 h-full">
-                        <div class="flex flex-column justify-content-between">
-                            <div class="flex flex-column">
-                                <div class="flex flex-column">
-                                    <div class="white-space-nowrap">
-                                        <a [href]="'http://' + axe.IP" target="_blank" class="text-900" pTooltip="Hostname" tooltipPosition="top">
-                                            {{axe.hostname}}
-                                        </a>
-                                        <span class="ml-1 text-lg line-height-1 cursor-pointer" [ngStyle]="{color: axe.swarmColor}" pTooltip="{{stringifyDeviceLabel(axe)}}" tooltipPosition="top">
-                                            ●
-                                        </span>
-                                    </div>
-                                    <a [href]="'http://' + axe.IP" target="_blank" class="text-800" pTooltip="IP" tooltipPosition="top">
-                                        {{axe.IP}}
-                                    </a>
-                                </div>
-                                <span class="text-500 cursor-pointer" pTooltip="Version" tooltipPosition="top">
-                                    {{axe.version}}
-                                </span>
-                                <span class="text-500 cursor-pointer" pTooltip="Uptime: {{axe.uptimeSeconds | dateAgo}}" tooltipPosition="top">
-                                    {{axe.uptimeSeconds | dateAgo: {intervals: 1} }}
-                                </span>
-                            </div>
-                            <div class="flex align-items-center mb-1 gap-3 md:gap-2">
-                                <p-button
-                                    icon="pi pi-pencil text-sm flex align-items-center justify-content-center"
-                                    pp-button
-                                    pTooltip="Edit"
-                                    tooltipPosition="top"
-                                    severity="secondary"
-                                    styleClass="button-icon-small"
-                                    (click)="edit(axe)" />
-                                <p-button
-                                    icon="pi pi-refresh text-sm flex align-items-center justify-content-center"
-                                    pp-button
-                                    pTooltip="Restart"
-                                    tooltipPosition="top"
-                                    severity="secondary"
-                                    styleClass="button-icon-small"
-                                    (click)="restart(axe)" />
-                                <p-button
-                                    icon="pi pi-trash text-sm flex align-items-center justify-content-center"
-                                    pp-button
-                                    pTooltip="Remove"
-                                    tooltipPosition="top"
-                                    severity="secondary"
-                                    styleClass="button-icon-small"
-                                    (click)="remove(axe)" />
-                                <i
-                                    *ngIf="getDeviceNotification(axe) as notification"
-                                    class="pi pi-exclamation-triangle cursor-pointer text-lg"
-                                    pTooltip="{{ notification.msg }}"
-                                    tooltipPosition="top"
-                                    [ngClass]="'text-' + notification.color + '-500'"></i>
-                            </div>
-                        </div>
-                        <div class="flex flex-column text-right white-space-nowrap cursor-pointer">
-                            <span pTooltip="Hashrate" tooltipPosition="top">
-                                {{axe.hashRate * 1000000000 | hashSuffix}}
-                            </span>
-                            <div>
-                                <span class="text-500 cursor-pointer mr-2" pTooltip="Shares Rejected" tooltipPosition="top">
-                                    {{axe.sharesRejected | number: '1.0-0'}}
-                                </span>
-                                <span class="cursor-pointer" pTooltip="Shares Accepted" tooltipPosition="top">
-                                    {{axe.sharesAccepted | number: '1.0-0'}}
-                                </span>
-                            </div>
-                            <div>
-                                <span class="text-500 cursor-pointer mr-2" pTooltip="Best Session Diff" tooltipPosition="top">
-                                    {{axe.bestSessionDiff | diffSuffix}}
-                                </span>
-                                <span class="cursor-pointer" pTooltip="Best Diff" tooltipPosition="top">
-                                    {{axe.bestDiff | diffSuffix}}
-                                </span>
-                            </div>
-                            <div>
-                                <span *ngIf="axe.vrTemp" class="text-500 cursor-pointer mr-2" [ngClass]="{'text-red-500': axe.vrTemp > 105}" pTooltip="Voltage Regulator Temperature" tooltipPosition="top">
-                                    {{axe.vrTemp | number: '1.0-1'}} °C
-                                </span>
-                                <span *ngIf="axe.temp2 > 0" class="cursor-pointer mr-2" [ngClass]="{'text-red-500': axe.temp2 > 70}" pTooltip="ASIC Temperature 2" tooltipPosition="top">
-                                    {{axe.temp2 | number: '1.0-1'}} °C
-                                </span>
-                                <span class="cursor-pointer" [ngClass]="{'text-red-500': axe.temp > 70}" pTooltip="ASIC Temperature{{ axe.temp2 > 0 ? ' 1' : '' }}" tooltipPosition="top">
-                                    <ng-container *ngIf="axe.temp > 0; else noValue">
-                                        {{axe.temp | number: '1.0-1'}} °C
-                                    </ng-container>
-                                </span>
-                            </div>
-                            <span class="cursor-pointer" pTooltip="Power" tooltipPosition="top">
-                                {{axe.power | number: '1.1-1'}} W
-                            </span>
-                            <span class="cursor-pointer" pTooltip="Pool Diff" tooltipPosition="top">
-                                {{axe.poolDifficulty}}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex flex-wrap gap-2 mt-3 text-sm justify-content-center">
-                <div *ngFor="let item of deviceFamilies" class="flex align-items-center gap-1">
-                    <span [ngStyle]="{color: item.swarmColor}">●</span>
-                    <span class="text-500">{{stringifyDeviceLabel(item)}}</span>
-                </div>
-            </div>
-        </ng-container>
-    </ng-container>
-
-    <ng-template #noFilterResults>
-        <div class="text-500 text-center w-full pt-5">
-            No matches found
-        </div>
-    </ng-template>
-
-    <ng-template #noDevices>
-        <p class="text-500 text-center pt-5">
-            Scan your network for devices or add a device manually by using its IP address.
-        </p>
-    </ng-template>
-
-    <form *ngIf="form" [formGroup]="form" class="card flex flex-column md:flex-row gap-3 mt-5">
-        <button pButton (click)="scanNetwork()" [disabled]="scanning" class="white-space-nowrap w-full md:w-auto block text-center button-text">
-            {{scanning ? 'Scanning...' : 'Auto Scan'}}
-        </button>
-
-        <div class="flex align-items-center gap-3" *ngIf="this.swarm.length">
-            <button pButton (click)="refreshList()" class="flex justify-content-between button-text">
-                <span>{{isRefreshing ? 'Refreshing...' : 'Refresh'}}</span>
-                <span *ngIf="!isRefreshing" class="text-sm text-700">{{refreshIntervalTime}}</span>
+    <div class="swarm-toolbar">
+        <div class="p-input-icon-left swarm-filter">
+            <i class="pi pi-filter"></i>
+            <input pInputText type="text" autocomplete="off" placeholder="Filter by name, IP or model"
+                aria-label="Filter miners" [(ngModel)]="filterText" />
+            <button *ngIf="filterText" type="button" class="swarm-filter-clear" aria-label="Clear filter" (click)="filterText = ''">
+                <i class="pi pi-times"></i>
             </button>
-            <div class="flex flex-grow-1 align-items-center gap-3">
-                <p-slider class="w-full md:w-3rem xl:w-6rem" [min]="5" [max]="30" [formControl]="refreshIntervalControl"></p-slider>
-                <span class="text-sm white-space-nowrap">{{refreshTimeSet}} s</span>
-            </div>
         </div>
-
-        <div class="md:ml-auto">
-            <p-inputGroup>
-                <input pInputText placeholder="Add Device by IP" formControlName="manualAddIp" type="text" class="xl:w-20rem" />
-                <button pButton [disabled]="form.invalid" (click)="add()" class="ml-1">Add</button>
-            </p-inputGroup>
+        <div class="swarm-legend">
+            <span *ngFor="let item of deviceFamilies">
+                <span class="family-dot" [ngStyle]="{background: item.swarmColor}"></span>{{stringifyDeviceLabel(item)}}
+            </span>
         </div>
-    </form>
+    </div>
 
-    <app-modal [headline]="selectedAxeOs?.IP">
-        <app-edit *ngIf="selectedAxeOs" [uri]="'http://' + selectedAxeOs.IP"></app-edit>
-    </app-modal>
-</div>
+    <div class="swarm-grid" *ngIf="filteredSwarm.length; else noFilterResults">
+        <article class="panel miner" *ngFor="let axe of filteredSwarm" [style.--heat]="heat(axe)">
+            <header class="miner-head">
+                <div class="miner-id">
+                    <a [href]="'http://' + axe.IP" target="_blank" rel="noopener noreferrer" class="miner-name">
+                        <span class="family-dot" [ngStyle]="{background: axe.swarmColor}" [title]="stringifyDeviceLabel(axe)"></span>{{axe.hostname}}
+                    </a>
+                    <span class="miner-meta"><span class="num">{{axe.IP}}</span>, firmware {{axe.version}}</span>
+                </div>
+                <div class="miner-hashrate num">{{axe.hashRate * 1000000000 | hashSuffix}}</div>
+            </header>
+
+            <span *ngIf="getDeviceNotification(axe) as notification" class="tag miner-tag" [ngClass]="notificationTag(notification.color)">
+                {{ notification.msg }}
+            </span>
+
+            <dl class="facts miner-facts">
+                <div>
+                    <dt>Temperature</dt>
+                    <dd class="miner-heat">
+                        <span class="heat-dot"></span>
+                        <ng-container *ngIf="axe.temp > 0; else noValue">
+                            <span class="num">{{axe.temp | number: '1.0-1'}} °C</span>
+                            <span class="num" *ngIf="axe.temp2 > 0">, {{axe.temp2 | number: '1.0-1'}} °C</span>
+                        </ng-container>
+                        <span class="num muted" *ngIf="axe.vrTemp" title="Voltage regulator">VR {{axe.vrTemp | number: '1.0-0'}} °C</span>
+                    </dd>
+                </div>
+                <div><dt>Power</dt><dd class="num">{{axe.power | number: '1.1-1'}} W</dd></div>
+                <div>
+                    <dt>Shares</dt>
+                    <dd><span class="num">{{axe.sharesAccepted | number: '1.0-0'}}</span> <span class="muted num">({{axe.sharesRejected | number: '1.0-0'}} rejected)</span></dd>
+                </div>
+                <div>
+                    <dt>Best difficulty</dt>
+                    <dd><span class="num">{{axe.bestDiff | diffSuffix}}</span> <span class="muted num">({{axe.bestSessionDiff | diffSuffix}} since restart)</span></dd>
+                </div>
+                <div><dt>Share difficulty</dt><dd class="num">{{axe.poolDifficulty}}</dd></div>
+                <div><dt>Running for</dt><dd [title]="axe.uptimeSeconds | dateAgo">{{axe.uptimeSeconds | dateAgo: {intervals: 1} }}</dd></div>
+            </dl>
+
+            <footer class="miner-actions">
+                <button pButton type="button" class="p-button-secondary p-button-sm" icon="pi pi-pencil" label="Edit" (click)="edit(axe)"></button>
+                <button pButton type="button" class="p-button-secondary p-button-sm" icon="pi pi-refresh" label="Restart" (click)="restart(axe)"></button>
+                <button pButton type="button" class="p-button-danger p-button-sm p-button-text miner-remove" icon="pi pi-trash" label="Remove" (click)="remove(axe)"></button>
+            </footer>
+        </article>
+    </div>
+</ng-container>
+
+<ng-template #noFilterResults>
+    <p class="swarm-empty">No miners match "{{filterText}}".</p>
+</ng-template>
+
+<ng-template #noDevices>
+    <section class="panel swarm-intro">
+        <h2 class="panel-title">No miners yet</h2>
+        <p>Scan your network to find other miners, or add one by its IP address below.</p>
+    </section>
+</ng-template>
+
+<form *ngIf="form" [formGroup]="form" class="panel swarm-controls">
+    <button pButton type="button" (click)="scanNetwork()" [disabled]="scanning" [loading]="scanning">
+        {{scanning ? 'Scanning…' : 'Scan network'}}
+    </button>
+
+    <div class="swarm-refresh" *ngIf="swarm.length">
+        <button pButton type="button" class="p-button-secondary" (click)="refreshList()">
+            {{isRefreshing ? 'Refreshing…' : 'Refresh'}}
+            <span *ngIf="!isRefreshing" class="swarm-countdown num">{{refreshIntervalTime}}</span>
+        </button>
+        <label class="swarm-interval">
+            <span>Every</span>
+            <p-slider class="swarm-slider" [min]="5" [max]="30" [formControl]="refreshIntervalControl" ariaLabel="Refresh interval in seconds"></p-slider>
+            <span class="num">{{refreshTimeSet}} s</span>
+        </label>
+    </div>
+
+    <div class="swarm-add">
+        <p-inputGroup>
+            <input pInputText placeholder="IP address, e.g. 192.168.1.42" aria-label="Miner IP address" formControlName="manualAddIp" type="text" />
+            <button pButton type="button" [disabled]="form.invalid" (click)="add()">Add miner</button>
+        </p-inputGroup>
+    </div>
+</form>
+
+<app-modal [headline]="selectedAxeOs?.hostname || selectedAxeOs?.IP">
+    <app-edit *ngIf="selectedAxeOs" [uri]="'http://' + selectedAxeOs.IP"></app-edit>
+</app-modal>

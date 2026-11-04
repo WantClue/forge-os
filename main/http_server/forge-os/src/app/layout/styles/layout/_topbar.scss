@@ -1,399 +1,99 @@
+// Top bar: page title on the left, live miner status on the right.
+// Sidebar is 256px wide on desktop and hidden below 992px (see _responsive).
+
 .layout-topbar {
     position: fixed;
-    height: auto;
-    min-height: 5rem;
+    top: 0; left: 0; right: 0;
     z-index: 997;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 1.5rem 2rem 1.5rem 274px; // Account for sidebar width
-    background: rgb(30, 41, 59);
-    border-bottom: 1px solid rgba(51, 65, 85, 0.8);
-    transition: left $transitionDuration;
     display: flex;
     align-items: center;
-    box-shadow: none;
-
-    // Dashboard Header Styles
-    .dashboard-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        width: 100%;
-
-        .header-content {
-            .dashboard-title {
-                font-size: 3rem;
-                font-weight: 700;
-                color: #f1f5f9;
-                margin: 0 0 0.5rem 0;
-                background: linear-gradient(135deg, #6366f1, #06b6d4);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
-            }
-
-            .dashboard-subtitle {
-                color: #94a3b8;
-                font-size: 1rem;
-                margin: 0;
-            }
-        }
-
-        .header-status {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-
-            .status-badge {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem 1rem;
-                border-radius: 0.5rem;
-                font-size: 0.875rem;
-                font-weight: 500;
-                border: 1px solid;
-
-                &.online {
-                    background: rgba(16, 185, 129, 0.1);
-                    border-color: rgba(16, 185, 129, 0.3);
-                    color: #10b981;
-                }
-
-                // Eco Mode - Green theme
-                &.eco-mode {
-                    background: rgba(16, 185, 129, 0.1);
-                    border-color: rgba(16, 185, 129, 0.3);
-                    color: #10b981;
-                }
-
-                // Medium Mode - Orange theme
-                &.medium-mode {
-                    background: rgba(245, 158, 11, 0.1);
-                    border-color: rgba(245, 158, 11, 0.3);
-                    color: #f59e0b;
-                }
-
-                // Power Mode - Red theme
-                &.power-mode {
-                    background: rgba(239, 68, 68, 0.1);
-                    border-color: rgba(239, 68, 68, 0.3);
-                    color: #ef4444;
-                }
-
-                // Custom Mode - Purple/Blue theme
-                &.custom-mode {
-                    background: rgba(99, 102, 241, 0.1);
-                    border-color: rgba(99, 102, 241, 0.3);
-                    color: #6366f1;
-                }
-
-                .status-dot {
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 50%;
-                    background: currentColor;
-                    animation: pulse 2s 3;
-                }
-            }
-
-            .restart-btn-header {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem 1rem;
-                background: transparent;
-                border: 1px solid #334155;
-                border-radius: 0.5rem;
-                color: #f1f5f9;
-                font-size: 0.875rem;
-                cursor: pointer;
-                transition: all 0.2s ease;
-
-                &:hover {
-                    background: rgba(51, 65, 85, 0.3);
-                    border-color: #475569;
-                }
-            }
-        }
-    }
-
-    @keyframes pulse {
-        0%, 100% { 
-            opacity: 1; 
-        }
-        50% { 
-            opacity: 0.5; 
-        }
-    }
-
-    .layout-topbar-logo {
-        display: flex;
-        align-items: center;
-        color: var(--surface-900);
-        font-size: 1.5rem;
-        font-weight: 500;
-        width: 250px;
-        border-radius: 12px;
-
-        img {
-            height: 2.5rem;
-            margin-right: .5rem;
-        }
-
-        &:focus {
-            @include focused();
-        }
-    }
-
-    .layout-topbar-button {
-        display: inline-flex;
-        justify-content: center;
-        align-items: center;
-        position: relative;
-        color: var(--primary-color);
-        border-radius: 50%;
-        width: 3rem;
-        height: 3rem;
-        cursor: pointer;
-        transition: background-color $transitionDuration;
-
-        &:hover {
-            color: var(--text-color);
-            background-color: var(--surface-hover);
-        }
-
-        &:focus {
-            @include focused();
-        }
-
-        i {
-            font-size: 1.5rem;
-        }
-
-        span {
-            font-size: 1rem;
-            display: none;
-        }
-    }
-
-    .layout-menu-button {
-        display: none; // Hide in new design since sidebar is always visible
-    }
-
-    .layout-topbar-menu-button {
-        display: none;
-
-        i {
-            font-size: 1.25rem;
-        }
-    }
-
-    .layout-topbar-menu {
-        margin: 0 0 0 auto;
-        padding: 0;
-        list-style: none;
-        display: flex;
-
-        .layout-topbar-button {
-            margin-left: 1rem;
-        }
-    }
+    gap: 1rem;
+    min-height: 4rem;
+    padding: 0.75rem 1.5rem 0.75rem calc(256px + 1.5rem);
+    background: var(--quench);
+    border-bottom: 1px solid var(--scale);
 }
 
-@media (max-width: 768px) {
-    .layout-topbar {
-        padding: 1rem 1rem 1rem 4rem; // Add left padding for menu button
-        flex-direction: column;
-        align-items: stretch;
-        min-height: auto;
-
-        .dashboard-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 1rem;
-
-            .header-content {
-                width: 100%;
-                overflow: hidden;
-
-                .dashboard-title {
-                    font-size: 2rem;
-                    word-break: break-word;
-                    overflow-wrap: break-word;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-
-                .dashboard-subtitle {
-                    word-break: break-word;
-                    overflow-wrap: break-word;
-                }
-            }
-
-            .header-status {
-                width: 100%;
-                align-self: stretch;
-                justify-content: space-between;
-                flex-wrap: nowrap;
-                gap: 0.5rem;
-
-                .status-badge {
-                    flex: 1 1 auto;
-                    min-width: 0;
-                    justify-content: center;
-                }
-
-                .restart-btn-header {
-                    flex: 1 1 auto;
-                    min-width: 0;
-                    justify-content: center;
-                }
-            }
-        }
-
-        .layout-menu-button {
-            display: inline-flex;
-            position: fixed;
-            top: 1rem;
-            left: 1rem;
-            z-index: 1000;
-            background: rgb(30, 41, 59);
-            border-radius: 0.5rem;
-        }
-
-        .layout-topbar-menu-button {
-            display: inline-flex;
-            margin-left: 0;
-            order: 3;
-        }
-
-        .layout-topbar-menu {
-            margin-left: 0;
-            position: absolute;
-            flex-direction: column;
-            background-color: var(--surface-overlay);
-            box-shadow: 0px 3px 5px rgba(0,0,0,.02), 0px 0px 2px rgba(0,0,0,.05), 0px 1px 4px rgba(0,0,0,.08);
-            border-radius: 12px;
-            padding: 1rem;
-            right: 2rem;
-            top: 5rem;
-            min-width: 15rem;
-            display: none;
-            -webkit-animation: scalein 0.15s linear;
-            animation: scalein 0.15s linear;
-
-            &.layout-topbar-menu-mobile-active {
-                display: block
-            }
-
-            .layout-topbar-button {
-                margin-left: 0;
-                display: flex;
-                width: 100%;
-                height: auto;
-                justify-content: flex-start;
-                border-radius: 12px;
-                padding: 1rem;
-
-                i {
-                    font-size: 1rem;
-                    margin-right: .5rem;
-                }
-
-                span {
-                    font-weight: medium;
-                    display: block;
-                }
-            }
-        }
-    }
+.topbar-title {
+    margin: 0;
+    font-size: var(--fs-xl);
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-@media (max-width: 480px) {
-    .layout-topbar {
-        padding: 0.5rem 0.5rem 0.5rem 3.5rem; // Keep left padding for menu button
+.topbar-status {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-left: auto;
+    font-size: var(--fs-sm);
+    color: var(--ash);
+}
 
-        .dashboard-header {
-            gap: 0.75rem;
+.topbar-heat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    .num { color: var(--heat); transition: color 1.2s linear; }
+}
 
-            .header-content {
-                .dashboard-title {
-                    font-size: 1.5rem;
-                }
+.topbar-hashrate { color: var(--text); }
 
-                .dashboard-subtitle {
-                    font-size: 0.875rem;
-                }
-            }
+.topbar-restart {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4375rem 0.875rem;
+    background: transparent;
+    border: 1px solid var(--scale-strong);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
 
-            .header-status {
-                gap: 0.5rem;
+    &:hover { border-color: var(--steel); background: var(--anvil-raised); }
+    i { font-size: 0.875rem; }
+}
 
-                .status-badge {
-                    padding: 0.375rem 0.5rem;
-                    font-size: 0.75rem;
-                    white-space: nowrap;
-                }
+.layout-menu-button {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--scale-strong);
+    border-radius: var(--radius);
+    color: var(--text);
+    cursor: pointer;
 
-                .restart-btn-header {
-                    padding: 0.375rem 0.5rem;
-                    font-size: 0.75rem;
-                    white-space: nowrap;
+    &:hover { border-color: var(--steel); }
+    i { font-size: 1.125rem; }
+}
 
-                    i {
-                        margin-right: 0.25rem;
-                    }
-                }
-            }
-        }
+@media (max-width: 991px) {
+    .layout-topbar { padding-left: 1rem; padding-right: 1rem; }
+    .layout-menu-button { display: inline-flex; }
+}
 
-        .layout-menu-button {
-            top: 0.5rem;
-            left: 0.5rem;
-        }
-    }
+@media (max-width: 600px) {
+    .layout-topbar { flex-wrap: wrap; gap: 0.5rem 0.75rem; }
+    .topbar-title { font-size: var(--fs-lg); flex: 1; }
+    .topbar-status { width: 100%; gap: 1rem; margin-left: 0; }
+    .topbar-restart { margin-left: auto; }
 }
 
 @media (max-width: 360px) {
-    .layout-topbar {
-        padding-left: 3rem; // Smaller left padding for very small screens
+    .topbar-hashrate { display: none; }
+}
 
-        .dashboard-header {
-            .header-content {
-                .dashboard-title {
-                    font-size: 1.25rem;
-                }
-            }
-
-            .header-status {
-                flex-direction: row;
-                align-items: center;
-                gap: 0.5rem;
-
-                .status-badge, .restart-btn-header {
-                    flex: 1 1 0;
-                    justify-content: center;
-                    padding: 0.25rem 0.375rem;
-                    font-size: 0.625rem;
-                }
-
-                .restart-btn-header i {
-                    margin-right: 0.125rem;
-                    font-size: 0.75rem;
-                }
-            }
-        }
-
-        .layout-menu-button {
-            width: 2.5rem;
-            height: 2.5rem;
-
-            i {
-                font-size: 1.25rem;
-            }
-        }
-    }
+@media (prefers-reduced-motion: reduce) {
+    .topbar-heat .num { transition: none; }
 }
